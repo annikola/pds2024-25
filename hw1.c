@@ -1,14 +1,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
+
+#define MAX_CLUSTERS 2
 
 double random_double(double min, double max);
 
+typedef struct knn_centroid {
+    int center_index;
+    double **neighbors;
+} knn_centroid;
+
 int main(int argc, char *argv[]) {
 
-    int i, j;
+    int i, j, k, cc1, cc2;
     int c_size, q_size, d;
     double **c, **q;
+    double diff_squares_sum, min_euclid_distance, closest_centroid;
+    double curr_centroid_center_distances[MAX_CLUSTERS];
+    knn_centroid clusters[MAX_CLUSTERS];
+    
 
     if (argc < 4) {
         printf("Not enough arguments provided!\n");
@@ -43,21 +55,52 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    for (i = 0; i < c_size; i++) {
-        for (j = 0; j < d; j++) {
-            printf("%lf ", c[i][j]);
-        }
-        printf("\b\n");
+    for (i = 0; i < MAX_CLUSTERS; i++) {
+        clusters[i].center_index = rand() % c_size;
     }
-    printf("\n");
 
-    for (i = 0; i < q_size; i++) {
-        for (j = 0; j < d; j++) {
-            printf("%lf ", q[i][j]);
+    cc1 = cc2 = 0;
+    for (i = 0; i < c_size; i++) {
+        for (k = 0; k < MAX_CLUSTERS; k++) {
+            diff_squares_sum = 0.0;
+            for (j = 0; j < d; j++) {
+                diff_squares_sum += pow(c[i][j] - c[clusters[k].center_index][j], 2);
+            }
+            curr_centroid_center_distances[k] = sqrt(diff_squares_sum);
         }
-        printf("\b\n");
+
+        min_euclid_distance = 1e10; // MAX_DOUBLE...change that!
+        for (k = 0; k < MAX_CLUSTERS; k++) {
+            if (curr_centroid_center_distances[k] < min_euclid_distance) {
+                min_euclid_distance = curr_centroid_center_distances[k];
+                closest_centroid = k;
+            }
+        }
+        // clusters->neighbors Ylopoiise to...
+        if (closest_centroid == 0){
+            cc1++;
+        }
+        else {
+            cc2++;
+        }
     }
-    printf("\n");
+    printf("cc1: %d\ncc2: %d\n", cc1, cc2);
+
+    // for (i = 0; i < c_size; i++) {
+    //     for (j = 0; j < d; j++) {
+    //         printf("%lf ", c[i][j]);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n");
+
+    // for (i = 0; i < q_size; i++) {
+    //     for (j = 0; j < d; j++) {
+    //         printf("%lf ", q[i][j]);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n");
 
     return 0;
 }

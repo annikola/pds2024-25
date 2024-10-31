@@ -2,10 +2,13 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <pthread.h>
 
+#define MAX_THREADS 5
 #define MAX_CLUSTERS 2
 
 double random_double(double min, double max);
+void *distance_calculator(void *ccN);
 
 typedef struct knn_centroid {
     int center_index;
@@ -14,13 +17,13 @@ typedef struct knn_centroid {
 
 int main(int argc, char *argv[]) {
 
-    int i, j, k, cc1, cc2;
+    int i, j, k, t, cc1, cc2;
     int c_size, q_size, d;
     double **c, **q;
     double diff_squares_sum, min_euclid_distance, closest_centroid;
     double curr_centroid_center_distances[MAX_CLUSTERS];
     knn_centroid clusters[MAX_CLUSTERS];
-    
+    pthread_t thread_ids[MAX_THREADS];
 
     if (argc < 4) {
         printf("Not enough arguments provided!\n");
@@ -86,6 +89,14 @@ int main(int argc, char *argv[]) {
     }
     printf("cc1: %d\ncc2: %d\n", cc1, cc2);
 
+    for (t = 0; t < MAX_THREADS; t++) {
+        pthread_create(&thread_ids[t], NULL, distance_calculator, &cc2);
+    }
+
+    for (t = 0; t < MAX_THREADS; t++) {
+        pthread_join(thread_ids[t], NULL);
+    }
+
     // for (i = 0; i < c_size; i++) {
     //     for (j = 0; j < d; j++) {
     //         printf("%lf ", c[i][j]);
@@ -112,4 +123,8 @@ double random_double(double min, double max) {
     scale = rand() / (double) RAND_MAX;
 
     return min + scale * (max - min);
+}
+
+void *distance_calculator(void *ccN) {
+    printf("%d\n", *(int *)ccN);
 }

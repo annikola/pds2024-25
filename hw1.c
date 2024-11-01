@@ -17,10 +17,11 @@ typedef struct knn_centroid {
 
 int main(int argc, char *argv[]) {
 
-    int i, j, k, t, cc1, cc2;
-    int c_size, q_size, d;
+    int i, j, k, l, t;
+    int c_size, q_size, d, closest_centroid;
     double **c, **q;
-    double diff_squares_sum, min_euclid_distance, closest_centroid;
+    double **temp[MAX_CLUSTERS];
+    double diff_squares_sum, min_euclid_distance;
     double curr_centroid_center_distances[MAX_CLUSTERS];
     knn_centroid clusters[MAX_CLUSTERS];
     pthread_t thread_ids[MAX_THREADS];
@@ -46,6 +47,13 @@ int main(int argc, char *argv[]) {
         q[j] = (double *)malloc(d * sizeof(double));
     }
 
+    for (l = 0;  l < MAX_CLUSTERS; l++) {
+        clusters[l].neighbors = (double **)malloc(c_size * sizeof(double *));
+        // for (i = 0; i < c_size; i++) {
+        //     clusters[l].neighbors[i] = (double *)malloc(d * sizeof(double));
+        // }
+    }
+
     for (i = 0; i < c_size; i++) {
         for (j = 0; j < d; j++) {
             c[i][j] = random_double(1.0, 100.0);
@@ -62,7 +70,9 @@ int main(int argc, char *argv[]) {
         clusters[i].center_index = rand() % c_size;
     }
 
-    cc1 = cc2 = 0;
+    for (k = 0; k < MAX_CLUSTERS; k++) {
+        temp[k] = clusters[k].neighbors;
+    }
     for (i = 0; i < c_size; i++) {
         for (k = 0; k < MAX_CLUSTERS; k++) {
             diff_squares_sum = 0.0;
@@ -79,39 +89,32 @@ int main(int argc, char *argv[]) {
                 closest_centroid = k;
             }
         }
-        // clusters->neighbors Ylopoiise to...
-        if (closest_centroid == 0){
-            cc1++;
+
+        *(temp[closest_centroid]) = c[i];
+        temp[closest_centroid]++;
+    }
+
+    for (k = 0; k < MAX_CLUSTERS; k++) {
+        clusters[k].neighbors = realloc(clusters[k].neighbors, (temp[k] - clusters[k].neighbors) * sizeof(double *));
+    }
+
+    for (k = 0; k < MAX_CLUSTERS; k++) {
+        for (i = 0; i < temp[k] - clusters[k].neighbors; i++) {
+            for (j = 0; j < d; j++) {
+                printf("%lf ", clusters[k].neighbors[i][j]);
+            }
+            printf("\b\n");
         }
-        else {
-            cc2++;
-        }
-    }
-    printf("cc1: %d\ncc2: %d\n", cc1, cc2);
-
-    for (t = 0; t < MAX_THREADS; t++) {
-        pthread_create(&thread_ids[t], NULL, distance_calculator, &cc2);
+        printf("\n");
     }
 
-    for (t = 0; t < MAX_THREADS; t++) {
-        pthread_join(thread_ids[t], NULL);
-    }
-
-    // for (i = 0; i < c_size; i++) {
-    //     for (j = 0; j < d; j++) {
-    //         printf("%lf ", c[i][j]);
-    //     }
-    //     printf("\b\n");
+    // for (t = 0; t < MAX_THREADS; t++) {
+    //     pthread_create(&thread_ids[t], NULL, distance_calculator, &cc2);
     // }
-    // printf("\n");
 
-    // for (i = 0; i < q_size; i++) {
-    //     for (j = 0; j < d; j++) {
-    //         printf("%lf ", q[i][j]);
-    //     }
-    //     printf("\b\n");
+    // for (t = 0; t < MAX_THREADS; t++) {
+    //     pthread_join(thread_ids[t], NULL);
     // }
-    // printf("\n");
 
     return 0;
 }

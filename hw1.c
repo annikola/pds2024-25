@@ -1,12 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <math.h>
 #include <pthread.h>
+#include "/usr/local/MATLAB/R2024b/extern/include/mat.h"
 
 #define MAX_THREADS 5
 #define MAX_CLUSTERS 2
 
+void write_2D_array_to_matfile(const char *filename);
 double random_double(double min, double max);
 void *distance_calculator(void *ccN);
 
@@ -26,6 +29,8 @@ int main(int argc, char *argv[]) {
     knn_centroid clusters[MAX_CLUSTERS];
     pthread_t thread_ids[MAX_THREADS];
 
+    /* THA FYGEI STO TELOS!!! --> */
+    
     if (argc < 4) {
         printf("Not enough arguments provided!\n");
         return 0;
@@ -47,23 +52,24 @@ int main(int argc, char *argv[]) {
         q[j] = (double *)malloc(d * sizeof(double));
     }
 
-    for (l = 0;  l < MAX_CLUSTERS; l++) {
-        clusters[l].neighbors = (double **)malloc(c_size * sizeof(double *));
-        // for (i = 0; i < c_size; i++) {
-        //     clusters[l].neighbors[i] = (double *)malloc(d * sizeof(double));
-        // }
-    }
-
     for (i = 0; i < c_size; i++) {
         for (j = 0; j < d; j++) {
             c[i][j] = random_double(1.0, 100.0);
         }
     }
 
+    write_2D_array_to_matfile("test.mat");
+
     for (i = 0; i < q_size; i++) {
         for (j = 0; j < d; j++) {
             q[i][j] = random_double(1.0, 100.0);
         }
+    }
+
+    /* <-- THA FYGEI STO TELOS!!! */
+
+    for (l = 0;  l < MAX_CLUSTERS; l++) {
+        clusters[l].neighbors = (double **)malloc(c_size * sizeof(double *));
     }
 
     for (i = 0; i < MAX_CLUSTERS; i++) {
@@ -98,15 +104,15 @@ int main(int argc, char *argv[]) {
         clusters[k].neighbors = realloc(clusters[k].neighbors, (temp[k] - clusters[k].neighbors) * sizeof(double *));
     }
 
-    for (k = 0; k < MAX_CLUSTERS; k++) {
-        for (i = 0; i < temp[k] - clusters[k].neighbors; i++) {
-            for (j = 0; j < d; j++) {
-                printf("%lf ", clusters[k].neighbors[i][j]);
-            }
-            printf("\b\n");
-        }
-        printf("\n");
-    }
+    // for (k = 0; k < MAX_CLUSTERS; k++) {
+    //     for (i = 0; i < temp[k] - clusters[k].neighbors; i++) {
+    //         for (j = 0; j < d; j++) {
+    //             printf("%lf ", clusters[k].neighbors[i][j]);
+    //         }
+    //         printf("\b\n");
+    //     }
+    //     printf("\n");
+    // }
 
     // for (t = 0; t < MAX_THREADS; t++) {
     //     pthread_create(&thread_ids[t], NULL, distance_calculator, &cc2);
@@ -117,6 +123,34 @@ int main(int argc, char *argv[]) {
     // }
 
     return 0;
+}
+
+void write_2D_array_to_matfile(const char *filename) {
+
+    MATFile *matFile = matOpen(filename, "w");
+    if (matFile == NULL) {
+        printf("Error opening MAT-file %s\n", filename);
+        return;
+    }
+
+    double array[3][3] = { {1.0, 2.0, 3.0},
+                           {4.0, 5.0, 6.0},
+                           {7.0, 8.0, 9.0} };
+
+    mxArray *matArray = mxCreateDoubleMatrix(3, 3, mxREAL);
+    if (matArray == NULL) {
+        printf("Could not create mxArray.\n");
+        matClose(matFile);
+        return;
+    }
+
+    memcpy(mxGetPr(matArray), array, sizeof(array));
+
+    matPutVariable(matFile, "myArray", matArray);
+
+    mxDestroyArray(matArray);
+    matClose(matFile);
+    printf("2D array written to %s successfully.\n", filename);
 }
 
 double random_double(double min, double max) {

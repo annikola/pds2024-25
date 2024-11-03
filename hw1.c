@@ -8,6 +8,7 @@
 
 #define MAX_THREADS 5
 #define MAX_SET_SPLIT 2
+#define MIN_ARGS 5
 
 struct hyper_set {
     int *indexes;
@@ -20,6 +21,13 @@ struct hyper_set {
     struct hyper_set **f_ptr;
 };
 
+typedef struct {
+    struct hyper_set *root;
+    struct hyper_set *leaf;
+    double *q_point;
+} hyper_traverse_args;
+
+void *hyper_binary_traverse(void *traverse_args);
 struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point);
 void *hyper_binary_split(void *hyper_subset);
 int is_duplicate(double *point1, double *point2, int d);
@@ -34,11 +42,12 @@ int main(int argc, char *argv[]) {
     double **c, **q;
     pthread_t thread_ids[MAX_THREADS];
     clock_t start_t;
-    struct hyper_set *root_hyper_set, *temp;
+    struct hyper_set **root_hyper_sets;
+    hyper_traverse_args **traverse_args;
 
     /* THA FYGEI STO TELOS!!! --> */
     
-    if (argc < 5) {
+    if (argc < MIN_ARGS) {
         printf("Not enough arguments provided!\n");
         return 0;
     }
@@ -87,69 +96,86 @@ int main(int argc, char *argv[]) {
     /* <-- THA FYGEI STO TELOS!!! */
 
     start_t = clock();
-    // root_hyper_set = (struct hyper_set *)malloc(sizeof(ThreadArgs)); ???
-    root_hyper_set = malloc(sizeof(struct hyper_set));
-    root_hyper_set->indexes = NULL;
-    root_hyper_set->neighbors = c;
-    root_hyper_set->set_size = c_size;
-    root_hyper_set->d = d;
-    root_hyper_set->coeffs = NULL; // Technically a zero-vector...
-    root_hyper_set->b_value = 0.0;
-    root_hyper_set->depth = depth;
-    root_hyper_set->f_ptr = NULL;
-    pthread_create(&thread_ids[0], NULL, hyper_binary_split, root_hyper_set);
-    // for (t = 0; t < MAX_THREADS; t++) {
-    //     pthread_create(&thread_ids[t], NULL, hyper_binary_split, root_hyper_set);
-    // }
+    root_hyper_sets = (struct hyper_set **)malloc(MAX_THREADS * sizeof(struct hyper_set *));
+    for (t = 0; t < MAX_THREADS; t++) {
+        root_hyper_sets[t] = malloc(sizeof(struct hyper_set));
+        root_hyper_sets[t]->indexes = NULL;
+        root_hyper_sets[t]->neighbors = c;
+        root_hyper_sets[t]->set_size = c_size;
+        root_hyper_sets[t]->d = d;
+        root_hyper_sets[t]->coeffs = NULL; // Technically a zero-vector...
+        root_hyper_sets[t]->b_value = 0.0;
+        root_hyper_sets[t]->depth = depth;
+        root_hyper_sets[t]->f_ptr = NULL;
+        pthread_create(&thread_ids[t], NULL, hyper_binary_split, root_hyper_sets[t]);
+    }
 
-    // for (t = 0; t < MAX_THREADS; t++) {
-    //     pthread_join(thread_ids[t], NULL);
-    // }
-    pthread_join(thread_ids[0], NULL);
+    for (t = 0; t < MAX_THREADS; t++) {
+        pthread_join(thread_ids[t], NULL);
+    }
+
     printf("Multithreaded application finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
+    printf("Point of interest: ");
     for (j = 0; j < d; j++) {
         printf("%lf ", q[0][j]);
     }
     printf("\b\n\n");
     
-    temp = hyper_search((struct hyper_set *)root_hyper_set, q[0]);
-    while ((temp->f_ptr) != NULL) {
-        temp = hyper_search(temp, q[0]);
+    traverse_args = (hyper_traverse_args **)malloc(MAX_THREADS * sizeof(hyper_traverse_args *));
+    for (t = 0; t < MAX_THREADS; t++) {
+        traverse_args[t] = malloc(sizeof(hyper_binary_traverse));
+        traverse_args[t]->root = (struct hyper_set *)root_hyper_sets[t];
+        traverse_args[t]->leaf = NULL;
+        traverse_args[t]->q_point = q[0];
+        pthread_create(&thread_ids[t], NULL, hyper_binary_traverse, traverse_args[t]);
     }
 
-    // temp points to a leaf!!! (The leaf is ONLY traversed below...)
-    for (i = 0; i < temp->set_size; i++) {
-        for (j = 0; j < temp->d; j++) {
-            printf("%lf ", temp->neighbors[i][j]);
+    for (t = 0; t < MAX_THREADS; t++) {
+        pthread_join(thread_ids[t], NULL);
+    }
+    printf("Tree scanning finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
+
+    // Print all leafs!
+    for (t = 0; t < MAX_THREADS; t++) {
+        for (i = 0; i < traverse_args[t]->leaf->set_size; i++) {
+            for (j = 0; j < traverse_args[t]->leaf->d; j++) {
+                printf("%lf ", traverse_args[t]->leaf->neighbors[i][j]);
+            }
+            printf("\b\n");
         }
-        printf("\b\n");
+        printf("\n\n");
     }
-    printf("\n\n");
-
-    // printf("Tree scanning finished in: %lf seconds!\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
-
-    // for (k = 0; k < MAX_CLUSTERS; k++) {
-    //     for (i = 0; i < temp[k] - clusters[k].neighbors; i++) {
-    //         for (j = 0; j < d; j++) {
-    //             printf("%lf ", clusters[k].neighbors[i][j]);
-    //         }
-    //         printf("\b\n");
-    //     }
-    //     printf("\n");
-    // }
 
     free(c);
     free(q);
-    free(root_hyper_set);
+    free(root_hyper_sets);
+    free(traverse_args);
 
     return 0;
+}
+
+void *hyper_binary_traverse(void *traverse_args) {
+
+    hyper_traverse_args *curr_args;
+
+    curr_args = (hyper_traverse_args *) traverse_args;
+
+    curr_args->leaf = hyper_search(curr_args->root, curr_args->q_point);
+    while ((curr_args->leaf->f_ptr) != NULL) {
+        curr_args->leaf = hyper_search(curr_args->leaf, curr_args->q_point);
+    }
+
 }
 
 struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point) {
 
     int i, j;
     double hyper_position;
+
+    if (hyper_subset->coeffs == NULL) {
+        printf("YES\n");
+    }
 
     hyper_position = 0.0;
     for (j = 0; j < hyper_subset->d; j++) {
@@ -183,7 +209,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
 
     int i, j;
     double *random_point_1, *random_point_2;
-    double midpoint[((struct hyper_set *)hyper_subset_void)->d], normal_vector[((struct hyper_set *)hyper_subset_void)->d];
+    double *midpoint, *normal_vector;
     double beta, hyper_position;
     struct hyper_set *hyper_subset, *new_hyper_subset_1, *new_hyper_subset_2;
 
@@ -197,10 +223,12 @@ void *hyper_binary_split(void *hyper_subset_void) {
         random_point_2 = hyper_subset->neighbors[rand() % hyper_subset->set_size];
     }
 
+    midpoint = (double *)malloc(hyper_subset->d * sizeof(double));
     for (j = 0; j < hyper_subset->d; j++) {
         midpoint[j] = (random_point_1[j] + random_point_2[j]) / 2.0;
     }
 
+    normal_vector = (double *)malloc(hyper_subset->d * sizeof(double));
     for (j = 0; j < hyper_subset->d; j++) {
         normal_vector[j] = random_point_2[j] - random_point_1[j];
     }

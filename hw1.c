@@ -9,12 +9,6 @@
 #define MAX_THREADS 5
 #define MAX_SET_SPLIT 2
 
-typedef struct {
-    double *q_curr;
-    int ccp_length;
-    int d;
-} ThreadArgs;
-
 struct hyper_set {
     int *indexes;
     double **neighbors;
@@ -27,7 +21,7 @@ struct hyper_set {
 };
 
 struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point);
-void *hyper_binary_split(struct hyper_set *hyper_subset);
+void *hyper_binary_split(void *hyper_subset);
 int is_duplicate(double *point1, double *point2, int d);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 double random_double(double min, double max);
@@ -40,7 +34,6 @@ int main(int argc, char *argv[]) {
     double **c, **q;
     pthread_t thread_ids[MAX_THREADS];
     clock_t start_t;
-    ThreadArgs *args;
     struct hyper_set *root_hyper_set, *temp;
 
     /* THA FYGEI STO TELOS!!! --> */
@@ -93,7 +86,9 @@ int main(int argc, char *argv[]) {
 
     /* <-- THA FYGEI STO TELOS!!! */
 
-    root_hyper_set = (struct hyper_set *)malloc(sizeof(struct hyper_set));
+    start_t = clock();
+    // root_hyper_set = (struct hyper_set *)malloc(sizeof(ThreadArgs)); ???
+    root_hyper_set = malloc(sizeof(struct hyper_set));
     root_hyper_set->indexes = NULL;
     root_hyper_set->neighbors = c;
     root_hyper_set->set_size = c_size;
@@ -102,9 +97,15 @@ int main(int argc, char *argv[]) {
     root_hyper_set->b_value = 0.0;
     root_hyper_set->depth = depth;
     root_hyper_set->f_ptr = NULL;
+    pthread_create(&thread_ids[0], NULL, hyper_binary_split, root_hyper_set);
+    // for (t = 0; t < MAX_THREADS; t++) {
+    //     pthread_create(&thread_ids[t], NULL, hyper_binary_split, root_hyper_set);
+    // }
 
-    start_t = clock();
-    hyper_binary_split(root_hyper_set);
+    // for (t = 0; t < MAX_THREADS; t++) {
+    //     pthread_join(thread_ids[t], NULL);
+    // }
+    pthread_join(thread_ids[0], NULL);
     printf("Multithreaded application finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
     for (j = 0; j < d; j++) {
@@ -112,7 +113,7 @@ int main(int argc, char *argv[]) {
     }
     printf("\b\n\n");
     
-    temp = hyper_search(root_hyper_set, q[0]);
+    temp = hyper_search((struct hyper_set *)root_hyper_set, q[0]);
     while ((temp->f_ptr) != NULL) {
         temp = hyper_search(temp, q[0]);
     }
@@ -126,7 +127,7 @@ int main(int argc, char *argv[]) {
     }
     printf("\n\n");
 
-    printf("Tree scanning finished in: %lf seconds!\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
+    // printf("Tree scanning finished in: %lf seconds!\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
     // for (k = 0; k < MAX_CLUSTERS; k++) {
     //     for (i = 0; i < temp[k] - clusters[k].neighbors; i++) {
@@ -137,22 +138,6 @@ int main(int argc, char *argv[]) {
     //     }
     //     printf("\n");
     // }
-
-    // start_t = clock();
-    // args = (ThreadArgs *)malloc(sizeof(ThreadArgs)); ???
-    // args = malloc(sizeof(ThreadArgs));
-    // for (t = 0; t < MAX_THREADS; t++) {
-    //     args->q_curr = q[0];
-    //     args->ccp_length = 0 ???
-    //     args->d = d;
-    //     pthread_create(&thread_ids[t], NULL, distance_calculator, args);
-    // }
-
-    // for (t = 0; t < MAX_THREADS; t++) {
-    //     pthread_join(thread_ids[t], NULL);
-    // }
-
-    // printf("Multithreaded application finished in: %lf seconds!\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
     free(c);
     free(q);
@@ -194,13 +179,15 @@ struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point) 
     }
 }
 
-void *hyper_binary_split(struct hyper_set *hyper_subset) {
+void *hyper_binary_split(void *hyper_subset_void) {
 
     int i, j;
     double *random_point_1, *random_point_2;
-    double midpoint[hyper_subset->d], normal_vector[hyper_subset->d];
+    double midpoint[((struct hyper_set *)hyper_subset_void)->d], normal_vector[((struct hyper_set *)hyper_subset_void)->d];
     double beta, hyper_position;
-    struct hyper_set *new_hyper_subset_1, *new_hyper_subset_2;
+    struct hyper_set *hyper_subset, *new_hyper_subset_1, *new_hyper_subset_2;
+
+    hyper_subset = (struct hyper_set *)hyper_subset_void;
 
     random_point_1 = hyper_subset->neighbors[rand() % hyper_subset->set_size];
     random_point_2 = hyper_subset->neighbors[rand() % hyper_subset->set_size];
@@ -344,9 +331,6 @@ double random_double(double min, double max) {
 void *distance_calculator(void *args) {
 
     int i, j;
-    ThreadArgs *cargs;
-
-    cargs = (ThreadArgs *)args;
 
     printf("Thread finished!\n");
 }

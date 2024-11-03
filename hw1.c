@@ -7,13 +7,7 @@
 #include "/usr/local/MATLAB/R2024b/extern/include/mat.h"
 
 #define MAX_THREADS 5
-#define MAX_CLUSTERS 2
 #define MAX_SET_SPLIT 2
-
-void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
-void *hyper_binary_split(hyper_set hyper_subset, int depth);
-double random_double(double min, double max);
-void *distance_calculator(void *args);
 
 typedef struct {
     double *q_curr;
@@ -28,6 +22,11 @@ typedef struct {
     double *coeffs;
     double b_value;
 } hyper_set;
+
+void *hyper_binary_split(hyper_set hyper_subset, int depth);
+void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
+double random_double(double min, double max);
+void *distance_calculator(void *args);
 
 int main(int argc, char *argv[]) {
 
@@ -184,8 +183,6 @@ void *hyper_binary_split(hyper_set hyper_subset, int depth) {
     if (new_hyper_subset_2.set_size > depth) {
         hyper_binary_split(new_hyper_subset_2, depth);
     }
-
-    return;
 }
 
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d) {
@@ -240,18 +237,9 @@ double random_double(double min, double max) {
 void *distance_calculator(void *args) {
 
     int i, j;
-    double diff_squares_sum;
-    double closest_cluster_part_distances[((ThreadArgs *)args)->ccp_length];
     ThreadArgs *cargs;
 
     cargs = (ThreadArgs *)args;
-    for (i = 0; i < ((ThreadArgs *)cargs)->ccp_length; i++) {
-        diff_squares_sum = 0.0;
-        for (j = 0; j < ((ThreadArgs *)cargs)->d; j++) {
-            diff_squares_sum += pow(((ThreadArgs *)cargs)->q_curr[j] - ((ThreadArgs *)cargs)->closest_cluster_part.neighbors[i][j], 2);
-        }
-        closest_cluster_part_distances[i] = sqrt(diff_squares_sum);
-    }
 
     printf("Thread finished!\n");
 }

@@ -22,10 +22,13 @@ struct hyper_set {
     int d;
     double *coeffs;
     double b_value;
+    int depth;
     struct hyper_set **f_ptr;
 };
 
-void *hyper_binary_split(struct hyper_set *hyper_subset, int depth);
+struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point);
+void *hyper_binary_split(struct hyper_set *hyper_subset);
+int is_duplicate(double *point1, double *point2, int d);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 double random_double(double min, double max);
 void *distance_calculator(void *args);
@@ -76,9 +79,17 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // write_2D_array_to_matfile("test.mat", "C", c, c_size, d);
-    // write_2D_array_to_matfile("test2.mat", "Q", q, q_size, d);
-    // printf("\n");
+    write_2D_array_to_matfile("test.mat", "C", c, c_size, d);
+    write_2D_array_to_matfile("test2.mat", "Q", q, q_size, d);
+    printf("\n");
+
+    for (i = 0; i < c_size; i++) {
+        for (j = 0; j < d; j++) {
+            printf("%lf ", c[i][j]);
+        }
+        printf("\b\n");
+    }
+    printf("\n");
 
     /* <-- THA FYGEI STO TELOS!!! */
 
@@ -89,18 +100,31 @@ int main(int argc, char *argv[]) {
     root_hyper_set->d = d;
     root_hyper_set->coeffs = NULL; // Technically a zero-vector...
     root_hyper_set->b_value = 0.0;
+    root_hyper_set->depth = depth;
     root_hyper_set->f_ptr = NULL;
 
     start_t = clock();
-    hyper_binary_split(root_hyper_set, depth);
-    printf("Multithreaded application finished in: %lf seconds!\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
+    hyper_binary_split(root_hyper_set);
+    printf("Multithreaded application finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
-    temp = root_hyper_set->f_ptr[rand() % 2];
+    for (j = 0; j < d; j++) {
+        printf("%lf ", q[0][j]);
+    }
+    printf("\b\n\n");
+    
+    temp = hyper_search(root_hyper_set, q[0]);
     while ((temp->f_ptr) != NULL) {
-        temp = temp->f_ptr[rand() % 2];
+        temp = hyper_search(temp, q[0]);
     }
 
-    // THERE temp points to a leaf!!! (The leaf is not traversed above...)
+    // temp points to a leaf!!! (The leaf is ONLY traversed below...)
+    for (i = 0; i < temp->set_size; i++) {
+        for (j = 0; j < temp->d; j++) {
+            printf("%lf ", temp->neighbors[i][j]);
+        }
+        printf("\b\n");
+    }
+    printf("\n\n");
 
     printf("Tree scanning finished in: %lf seconds!\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
@@ -137,7 +161,40 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void *hyper_binary_split(struct hyper_set *hyper_subset, int depth) {
+struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point) {
+
+    int i, j;
+    double hyper_position;
+
+    hyper_position = 0.0;
+    for (j = 0; j < hyper_subset->d; j++) {
+        hyper_position += hyper_subset->coeffs[j] * q_point[j];
+    }
+
+    // for (i = 0; i < hyper_subset->f_ptr[0]->set_size; i++) {
+    //     for (j = 0; j < hyper_subset->d; j++) {
+    //         printf("%lf ", hyper_subset->f_ptr[0]->neighbors[i][j]);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n\n");
+
+    // for (i = 0; i < hyper_subset->f_ptr[1]->set_size; i++) {
+    //     for (j = 0; j < hyper_subset->d; j++) {
+    //         printf("%lf ", hyper_subset->f_ptr[1]->neighbors[i][j]);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n\n");
+
+    if (hyper_position > hyper_subset->b_value) {
+        return hyper_subset->f_ptr[0];
+    } else {
+        return hyper_subset->f_ptr[1];
+    }
+}
+
+void *hyper_binary_split(struct hyper_set *hyper_subset) {
 
     int i, j;
     double *random_point_1, *random_point_2;
@@ -147,6 +204,11 @@ void *hyper_binary_split(struct hyper_set *hyper_subset, int depth) {
 
     random_point_1 = hyper_subset->neighbors[rand() % hyper_subset->set_size];
     random_point_2 = hyper_subset->neighbors[rand() % hyper_subset->set_size];
+
+    // RARE CASE!!!
+    while (is_duplicate(random_point_1, random_point_2, hyper_subset->d)) {
+        random_point_2 = hyper_subset->neighbors[rand() % hyper_subset->set_size];
+    }
 
     for (j = 0; j < hyper_subset->d; j++) {
         midpoint[j] = (random_point_1[j] + random_point_2[j]) / 2.0;
@@ -172,6 +234,7 @@ void *hyper_binary_split(struct hyper_set *hyper_subset, int depth) {
     new_hyper_subset_2->indexes = (int *)malloc(hyper_subset->set_size * sizeof(int));
     new_hyper_subset_2->neighbors = (double **)malloc(hyper_subset->set_size * sizeof(double *));
 
+    new_hyper_subset_1->depth = new_hyper_subset_2->depth = hyper_subset->depth;
     new_hyper_subset_1->d = new_hyper_subset_2->d = hyper_subset->d;
     new_hyper_subset_1->set_size = new_hyper_subset_2->set_size = 0;
     for (i = 0; i < hyper_subset->set_size; i++) {
@@ -202,18 +265,31 @@ void *hyper_binary_split(struct hyper_set *hyper_subset, int depth) {
     hyper_subset->f_ptr[0] = new_hyper_subset_1;
     hyper_subset->f_ptr[1] = new_hyper_subset_2;
 
-    if (new_hyper_subset_1->set_size > depth) {
-        hyper_binary_split(new_hyper_subset_1, depth);
+    if (new_hyper_subset_1->set_size > hyper_subset->depth) {
+        hyper_binary_split(new_hyper_subset_1);
     } else {
         new_hyper_subset_1->f_ptr = NULL;
     }
     
-    if (new_hyper_subset_2->set_size > depth) {
-        hyper_binary_split(new_hyper_subset_2, depth);
+    if (new_hyper_subset_2->set_size > hyper_subset->depth) {
+        hyper_binary_split(new_hyper_subset_2);
     } else {
         new_hyper_subset_2->f_ptr = NULL;
     }
 
+}
+
+int is_duplicate(double *point1, double *point2, int d) {
+
+    int j;
+
+    for (j = 0; j < d; j++) {
+        if (point1[j] != point2[j]) {
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d) {

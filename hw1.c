@@ -36,6 +36,7 @@ int main(int argc, char *argv[]) {
     pthread_t thread_ids[MAX_THREADS];
     clock_t start_t;
     ThreadArgs *args;
+    hyper_set initial_hyper_set;
 
     /* THA FYGEI STO TELOS!!! --> */
     
@@ -72,10 +73,18 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    write_2D_array_to_matfile("test.mat", "C", c, c_size, d);
-    write_2D_array_to_matfile("test2.mat", "Q", q, q_size, d);
+    // write_2D_array_to_matfile("test.mat", "C", c, c_size, d);
+    // write_2D_array_to_matfile("test2.mat", "Q", q, q_size, d);
+    // printf("\n");
 
     /* <-- THA FYGEI STO TELOS!!! */
+
+    initial_hyper_set.neighbors = c;
+    initial_hyper_set.set_size = c_size;
+    initial_hyper_set.d = d;
+    initial_hyper_set.coeffs = NULL; // Technically a zero-vector...
+    initial_hyper_set.b_value = 0.0;
+    hyper_binary_split(initial_hyper_set, 2);
 
     // for (k = 0; k < MAX_CLUSTERS; k++) {
     //     for (i = 0; i < temp[k] - clusters[k].neighbors; i++) {
@@ -160,21 +169,21 @@ void *hyper_binary_split(hyper_set hyper_subset, int depth) {
     new_hyper_subset_1.neighbors = realloc(new_hyper_subset_1.neighbors, new_hyper_subset_1.set_size * sizeof(double *));
     new_hyper_subset_2.neighbors = realloc(new_hyper_subset_2.neighbors, new_hyper_subset_2.set_size * sizeof(double *));
 
-    for (i = 0; i < new_hyper_subset_1.set_size; i++) {
-        for (j = 0; j < new_hyper_subset_1.d; j++) {
-            printf("%lf ", new_hyper_subset_1.neighbors[i][j]);
-        }
-        printf("\b\n");
-    }
-    printf("\n");
+    // for (i = 0; i < new_hyper_subset_1.set_size; i++) {
+    //     for (j = 0; j < new_hyper_subset_1.d; j++) {
+    //         printf("%lf ", new_hyper_subset_1.neighbors[i][j]);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n");
 
-    for (i = 0; i < new_hyper_subset_2.set_size; i++) {
-        for (j = 0; j < new_hyper_subset_2.d; j++) {
-            printf("%lf ", new_hyper_subset_2.neighbors[i][j]);
-        }
-        printf("\b\n");
-    }
-    printf("\n\n\n\n");
+    // for (i = 0; i < new_hyper_subset_2.set_size; i++) {
+    //     for (j = 0; j < new_hyper_subset_2.d; j++) {
+    //         printf("%lf ", new_hyper_subset_2.neighbors[i][j]);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n\n\n\n");
 
     if (new_hyper_subset_1.set_size > depth) {
         hyper_binary_split(new_hyper_subset_1, depth);

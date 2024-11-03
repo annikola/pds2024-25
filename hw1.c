@@ -25,7 +25,7 @@ struct hyper_set {
     struct hyper_set **f_ptr;
 };
 
-struct hyper_set **hyper_binary_split(struct hyper_set hyper_subset, int depth);
+void *hyper_binary_split(struct hyper_set *hyper_subset, int depth);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 double random_double(double min, double max);
 void *distance_calculator(void *args);
@@ -38,8 +38,7 @@ int main(int argc, char *argv[]) {
     pthread_t thread_ids[MAX_THREADS];
     clock_t start_t;
     ThreadArgs *args;
-    struct hyper_set root_hyper_set;
-    struct hyper_set *temp;
+    struct hyper_set *root_hyper_set, *temp;
 
     /* THA FYGEI STO TELOS!!! --> */
     
@@ -83,24 +82,27 @@ int main(int argc, char *argv[]) {
 
     /* <-- THA FYGEI STO TELOS!!! */
 
-    root_hyper_set.neighbors = c;
-    root_hyper_set.set_size = c_size;
-    root_hyper_set.d = d;
-    root_hyper_set.coeffs = NULL; // Technically a zero-vector...
-    root_hyper_set.b_value = 0.0;
-    root_hyper_set.f_ptr = NULL;
+    root_hyper_set = (struct hyper_set *)malloc(sizeof(struct hyper_set));
+    root_hyper_set->indexes = NULL;
+    root_hyper_set->neighbors = c;
+    root_hyper_set->set_size = c_size;
+    root_hyper_set->d = d;
+    root_hyper_set->coeffs = NULL; // Technically a zero-vector...
+    root_hyper_set->b_value = 0.0;
+    root_hyper_set->f_ptr = NULL;
 
     start_t = clock();
-    root_hyper_set.f_ptr[0];
-    root_hyper_set.f_ptr = hyper_binary_split(root_hyper_set, depth);
+    hyper_binary_split(root_hyper_set, depth);
     printf("Multithreaded application finished in: %lf seconds!\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
-    temp = root_hyper_set.f_ptr[0];
-    printf("%lf\n", temp->neighbors[0][0]);
-    while (temp->f_ptr != NULL) {
-        printf("HELLO\n");
+    temp = root_hyper_set->f_ptr[rand() % 2];
+    while ((temp->f_ptr) != NULL) {
         temp = temp->f_ptr[rand() % 2];
     }
+
+    // THERE temp points to a leaf!!! (The leaf is not traversed above...)
+
+    printf("Tree scanning finished in: %lf seconds!\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
     // for (k = 0; k < MAX_CLUSTERS; k++) {
     //     for (i = 0; i < temp[k] - clusters[k].neighbors; i++) {
@@ -130,102 +132,88 @@ int main(int argc, char *argv[]) {
 
     free(c);
     free(q);
+    free(root_hyper_set);
 
     return 0;
 }
 
-struct hyper_set **hyper_binary_split(struct hyper_set hyper_subset, int depth) {
+void *hyper_binary_split(struct hyper_set *hyper_subset, int depth) {
 
     int i, j;
     double *random_point_1, *random_point_2;
-    double midpoint[hyper_subset.d], normal_vector[hyper_subset.d];
+    double midpoint[hyper_subset->d], normal_vector[hyper_subset->d];
     double beta, hyper_position;
-    struct hyper_set new_hyper_subset_1, new_hyper_subset_2;
+    struct hyper_set *new_hyper_subset_1, *new_hyper_subset_2;
 
-    random_point_1 = hyper_subset.neighbors[rand() % hyper_subset.set_size];
-    random_point_2 = hyper_subset.neighbors[rand() % hyper_subset.set_size];
+    random_point_1 = hyper_subset->neighbors[rand() % hyper_subset->set_size];
+    random_point_2 = hyper_subset->neighbors[rand() % hyper_subset->set_size];
 
-    for (j = 0; j < hyper_subset.d; j++) {
+    for (j = 0; j < hyper_subset->d; j++) {
         midpoint[j] = (random_point_1[j] + random_point_2[j]) / 2.0;
     }
 
-    for (j = 0; j < hyper_subset.d; j++) {
+    for (j = 0; j < hyper_subset->d; j++) {
         normal_vector[j] = random_point_2[j] - random_point_1[j];
     }
 
     beta = 0.0;
-    for (j = 0; j < hyper_subset.d; j++) {
+    for (j = 0; j < hyper_subset->d; j++) {
         beta += normal_vector[j] * midpoint[j];
     }
 
-    hyper_subset.coeffs = normal_vector;
-    hyper_subset.b_value = beta;
+    hyper_subset->coeffs = normal_vector;
+    hyper_subset->b_value = beta;
 
-    new_hyper_subset_1.indexes = (int *)malloc(hyper_subset.set_size * sizeof(int));
-    new_hyper_subset_1.neighbors = (double **)malloc(hyper_subset.set_size * sizeof(double *));
+    new_hyper_subset_1 = (struct hyper_set *)malloc(sizeof(struct hyper_set));
+    new_hyper_subset_1->indexes = (int *)malloc(hyper_subset->set_size * sizeof(int));
+    new_hyper_subset_1->neighbors = (double **)malloc(hyper_subset->set_size * sizeof(double *));
 
-    new_hyper_subset_2.indexes = (int *)malloc(hyper_subset.set_size * sizeof(int));
-    new_hyper_subset_2.neighbors = (double **)malloc(hyper_subset.set_size * sizeof(double *));
+    new_hyper_subset_2 = (struct hyper_set *)malloc(sizeof(struct hyper_set));
+    new_hyper_subset_2->indexes = (int *)malloc(hyper_subset->set_size * sizeof(int));
+    new_hyper_subset_2->neighbors = (double **)malloc(hyper_subset->set_size * sizeof(double *));
 
-    new_hyper_subset_1.d = new_hyper_subset_2.d = hyper_subset.d;
-    new_hyper_subset_1.set_size = new_hyper_subset_2.set_size = 0;
-    for (i = 0; i < hyper_subset.set_size; i++) {
+    new_hyper_subset_1->d = new_hyper_subset_2->d = hyper_subset->d;
+    new_hyper_subset_1->set_size = new_hyper_subset_2->set_size = 0;
+    for (i = 0; i < hyper_subset->set_size; i++) {
         hyper_position = 0.0;
-        for (j = 0; j < hyper_subset.d; j++) {
-            hyper_position += normal_vector[j] * hyper_subset.neighbors[i][j];
+        for (j = 0; j < hyper_subset->d; j++) {
+            hyper_position += normal_vector[j] * hyper_subset->neighbors[i][j];
         }
 
         if (hyper_position > beta) {
-            new_hyper_subset_1.indexes[new_hyper_subset_1.set_size] = i;
-            new_hyper_subset_1.neighbors[new_hyper_subset_1.set_size] = hyper_subset.neighbors[i];
-            new_hyper_subset_1.set_size++;
+            new_hyper_subset_1->indexes[new_hyper_subset_1->set_size] = i;
+            new_hyper_subset_1->neighbors[new_hyper_subset_1->set_size] = hyper_subset->neighbors[i];
+            new_hyper_subset_1->set_size++;
         }
         else {
-            new_hyper_subset_2.indexes[new_hyper_subset_2.set_size] = i;
-            new_hyper_subset_2.neighbors[new_hyper_subset_2.set_size] = hyper_subset.neighbors[i];
-            new_hyper_subset_2.set_size++;
+            new_hyper_subset_2->indexes[new_hyper_subset_2->set_size] = i;
+            new_hyper_subset_2->neighbors[new_hyper_subset_2->set_size] = hyper_subset->neighbors[i];
+            new_hyper_subset_2->set_size++;
         }
     }
 
-    new_hyper_subset_1.indexes = realloc(new_hyper_subset_1.indexes, hyper_subset.set_size * sizeof(int));
-    new_hyper_subset_1.neighbors = realloc(new_hyper_subset_1.neighbors, new_hyper_subset_1.set_size * sizeof(double *));
+    new_hyper_subset_1->indexes = realloc(new_hyper_subset_1->indexes, hyper_subset->set_size * sizeof(int));
+    new_hyper_subset_1->neighbors = realloc(new_hyper_subset_1->neighbors, new_hyper_subset_1->set_size * sizeof(double *));
 
-    new_hyper_subset_2.indexes = realloc(new_hyper_subset_2.indexes, hyper_subset.set_size * sizeof(int));
-    new_hyper_subset_2.neighbors = realloc(new_hyper_subset_2.neighbors, new_hyper_subset_2.set_size * sizeof(double *));
+    new_hyper_subset_2->indexes = realloc(new_hyper_subset_2->indexes, hyper_subset->set_size * sizeof(int));
+    new_hyper_subset_2->neighbors = realloc(new_hyper_subset_2->neighbors, new_hyper_subset_2->set_size * sizeof(double *));
 
-    // for (i = 0; i < new_hyper_subset_1.set_size; i++) {
-    //     for (j = 0; j < new_hyper_subset_1.d; j++) {
-    //         printf("%lf ", new_hyper_subset_1.neighbors[i][j]);
-    //     }
-    //     printf("\b\n");
-    // }
-    // printf("\n");
+    hyper_subset->f_ptr = (struct hyper_set **)malloc(2 * sizeof(struct hyper_set *));
+    hyper_subset->f_ptr[0] = new_hyper_subset_1;
+    hyper_subset->f_ptr[1] = new_hyper_subset_2;
 
-    // for (i = 0; i < new_hyper_subset_2.set_size; i++) {
-    //     for (j = 0; j < new_hyper_subset_2.d; j++) {
-    //         printf("%lf ", new_hyper_subset_2.neighbors[i][j]);
-    //     }
-    //     printf("\b\n");
-    // }
-    // printf("\n\n\n\n");
-
-    hyper_subset.f_ptr = (struct hyper_set **)malloc(2 * sizeof(struct hyper_set *));
-    hyper_subset.f_ptr[0] = &new_hyper_subset_1;
-    hyper_subset.f_ptr[1] = &new_hyper_subset_2;
-
-    if (new_hyper_subset_1.set_size > depth) {
-        new_hyper_subset_1.f_ptr = hyper_binary_split(new_hyper_subset_1, depth);
+    if (new_hyper_subset_1->set_size > depth) {
+        hyper_binary_split(new_hyper_subset_1, depth);
     } else {
-        new_hyper_subset_1.f_ptr = NULL;
+        new_hyper_subset_1->f_ptr = NULL;
     }
     
-    if (new_hyper_subset_2.set_size > depth) {
-        new_hyper_subset_2.f_ptr = hyper_binary_split(new_hyper_subset_2, depth);
+    if (new_hyper_subset_2->set_size > depth) {
+        hyper_binary_split(new_hyper_subset_2, depth);
     } else {
-        new_hyper_subset_2.f_ptr = NULL;
+        new_hyper_subset_2->f_ptr = NULL;
     }
 
-    return hyper_subset.f_ptr;
 }
 
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d) {

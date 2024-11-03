@@ -9,16 +9,18 @@
 #define MAX_THREADS 5
 #define MAX_SET_SPLIT 2
 #define MIN_ARGS 5
+#define MIN_FEATURE 1.0
+#define MAX_FEATURE 100.0
 
 struct hyper_set {
-    int *indexes;
     double **neighbors;
+    struct hyper_set **f_ptr;
+    double *coeffs;
+    int *indexes;
+    double b_value;
     int set_size;
     int d;
-    double *coeffs;
-    double b_value;
     int depth;
-    struct hyper_set **f_ptr;
 };
 
 typedef struct {
@@ -31,6 +33,7 @@ void *hyper_binary_traverse(void *traverse_args);
 struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point);
 void *hyper_binary_split(void *hyper_subset);
 int is_duplicate(double *point1, double *point2, int d);
+double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 double random_double(double min, double max);
 void *distance_calculator(void *args);
@@ -38,12 +41,15 @@ void *distance_calculator(void *args);
 int main(int argc, char *argv[]) {
 
     int i, j, t;
-    int c_size, q_size, d, depth;
+    int c_size, d;
+    int q_size, depth;
+    // size_t c_size, d;
     double **c, **q;
     pthread_t thread_ids[MAX_THREADS];
-    clock_t start_t;
+    time_t start_t;
     struct hyper_set **root_hyper_sets;
     hyper_traverse_args **traverse_args;
+    // const char *filename;
 
     /* THA FYGEI STO TELOS!!! --> */
     
@@ -54,6 +60,7 @@ int main(int argc, char *argv[]) {
 
     srand(time(0));
 
+    // filename = &argv[1];
     c_size = atoi(argv[1]);
     q_size = atoi(argv[2]);
     d = atoi(argv[3]);
@@ -64,38 +71,40 @@ int main(int argc, char *argv[]) {
         c[i] = (double *)malloc(d * sizeof(double));
     }
 
-    q = (double **)malloc(q_size * sizeof(double *));
-    for (j = 0; j < q_size; j++) {
-        q[j] = (double *)malloc(d * sizeof(double));
-    }
-
     for (i = 0; i < c_size; i++) {
         for (j = 0; j < d; j++) {
             c[i][j] = random_double(1.0, 100.0);
         }
     }
 
+    // c = read_2D_array_from_matfile("big_set.mat", &c_size, &d);
+
+    q = (double **)malloc(q_size * sizeof(double *));
+    for (j = 0; j < q_size; j++) {
+        q[j] = (double *)malloc(d * sizeof(double));
+    }
+
     for (i = 0; i < q_size; i++) {
         for (j = 0; j < d; j++) {
-            q[i][j] = random_double(1.0, 100.0);
+            q[i][j] = random_double(MIN_FEATURE, MAX_FEATURE);
         }
     }
 
-    write_2D_array_to_matfile("test.mat", "C", c, c_size, d);
-    write_2D_array_to_matfile("test2.mat", "Q", q, q_size, d);
-    printf("\n");
+    // write_2D_array_to_matfile("test.mat", "C", c, c_size, d);
+    // write_2D_array_to_matfile("test2.mat", "Q", q, q_size, d);
+    // printf("\n");
 
-    for (i = 0; i < c_size; i++) {
-        for (j = 0; j < d; j++) {
-            printf("%lf ", c[i][j]);
-        }
-        printf("\b\n");
-    }
-    printf("\n");
+    // for (i = 0; i < c_size; i++) {
+    //     for (j = 0; j < d; j++) {
+    //         printf("%lf ", c[i][j]);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n");
 
     /* <-- THA FYGEI STO TELOS!!! */
 
-    start_t = clock();
+    start_t = time(NULL);
     root_hyper_sets = (struct hyper_set **)malloc(MAX_THREADS * sizeof(struct hyper_set *));
     for (t = 0; t < MAX_THREADS; t++) {
         root_hyper_sets[t] = malloc(sizeof(struct hyper_set));
@@ -114,13 +123,7 @@ int main(int argc, char *argv[]) {
         pthread_join(thread_ids[t], NULL);
     }
 
-    printf("Multithreaded application finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
-
-    printf("Point of interest: ");
-    for (j = 0; j < d; j++) {
-        printf("%lf ", q[0][j]);
-    }
-    printf("\b\n\n");
+    printf("Multithreaded application finished in: %ld seconds!\n\n", time(NULL) - start_t);
     
     traverse_args = (hyper_traverse_args **)malloc(MAX_THREADS * sizeof(hyper_traverse_args *));
     for (t = 0; t < MAX_THREADS; t++) {
@@ -134,18 +137,18 @@ int main(int argc, char *argv[]) {
     for (t = 0; t < MAX_THREADS; t++) {
         pthread_join(thread_ids[t], NULL);
     }
-    printf("Tree scanning finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
+    printf("Tree scanning finished in: %ld seconds!\n\n", time(NULL) - start_t);
 
     // Print all leafs!
-    for (t = 0; t < MAX_THREADS; t++) {
-        for (i = 0; i < traverse_args[t]->leaf->set_size; i++) {
-            for (j = 0; j < traverse_args[t]->leaf->d; j++) {
-                printf("%lf ", traverse_args[t]->leaf->neighbors[i][j]);
-            }
-            printf("\b\n");
-        }
-        printf("\n\n");
-    }
+    // for (t = 0; t < MAX_THREADS; t++) {
+    //     for (i = 0; i < traverse_args[t]->leaf->set_size; i++) {
+    //         for (j = 0; j < traverse_args[t]->leaf->d; j++) {
+    //             printf("%lf ", traverse_args[t]->leaf->neighbors[i][j]);
+    //         }
+    //         printf("\b\n");
+    //     }
+    //     printf("\n\n");
+    // }
 
     free(c);
     free(q);
@@ -172,10 +175,6 @@ struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point) 
 
     int i, j;
     double hyper_position;
-
-    if (hyper_subset->coeffs == NULL) {
-        printf("YES\n");
-    }
 
     hyper_position = 0.0;
     for (j = 0; j < hyper_subset->d; j++) {
@@ -305,6 +304,61 @@ int is_duplicate(double *point1, double *point2, int d) {
     }
 
     return 1;
+}
+
+double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d) {
+
+    MATFile *pmat;
+    mxArray *array_ptr;
+    size_t i, j;
+    double *data;
+    double **c;
+    const char *varname = "C"; // Name of the variable to read
+
+    pmat = matOpen(filename, "r");
+    if (pmat == NULL) {
+        fprintf(stderr, "Error opening file data.mat\n");
+        return NULL;
+    }
+
+    // Read a variable from the .mat file
+    array_ptr = matGetVariable(pmat, varname);
+    if (array_ptr == NULL) {
+        fprintf(stderr, "Error reading variable %s from file\n", varname);
+        matClose(pmat);
+        return NULL;
+    }
+
+    // Check if the variable is of the expected type (for example, double matrix)
+    if (mxIsDouble(array_ptr) && !mxIsComplex(array_ptr)) {
+        // Get the data pointer and array dimensions
+        data = mxGetPr(array_ptr);
+        size_t rows = mxGetM(array_ptr);
+        size_t cols = mxGetN(array_ptr);
+
+        *c_size = rows;
+        *d = cols;
+
+        c = (double **)malloc(rows * sizeof(double *));
+        for (i = 0; i < rows; i++) {
+            c[i] = (double *)malloc(cols * sizeof(double));
+        }
+
+        for (i = 0; i < rows; i++) {
+            for (j = 0; j < cols; j++) {
+                c[i][j] = data[i + j * rows];
+            }
+        }
+    } else {
+        fprintf(stderr, "Variable %s is not a double matrix\n", varname);
+        return NULL;
+    }
+
+    // Clean up
+    mxDestroyArray(array_ptr); // Free the mxArray
+    matClose(pmat);            // Close the MAT-file
+
+    return c;
 }
 
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d) {

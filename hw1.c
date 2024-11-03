@@ -44,9 +44,10 @@ int main(int argc, char *argv[]) {
     int c_size, d;
     int q_size, depth;
     // size_t c_size, d;
+    double elapsed;
     double **c, **q;
     pthread_t thread_ids[MAX_THREADS];
-    time_t start_t;
+    struct timespec start, end;
     struct hyper_set **root_hyper_sets;
     hyper_traverse_args **traverse_args;
     // const char *filename;
@@ -104,7 +105,7 @@ int main(int argc, char *argv[]) {
 
     /* <-- THA FYGEI STO TELOS!!! */
 
-    start_t = time(NULL);
+    clock_gettime(CLOCK_MONOTONIC, &start);
     root_hyper_sets = (struct hyper_set **)malloc(MAX_THREADS * sizeof(struct hyper_set *));
     for (t = 0; t < MAX_THREADS; t++) {
         root_hyper_sets[t] = malloc(sizeof(struct hyper_set));
@@ -123,7 +124,12 @@ int main(int argc, char *argv[]) {
         pthread_join(thread_ids[t], NULL);
     }
 
-    printf("Multithreaded application finished in: %ld seconds!\n\n", time(NULL) - start_t);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    // Calculate the elapsed time in seconds
+    elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+
+    printf("Multithreaded application finished in: %lf seconds!\n\n", elapsed);
     
     traverse_args = (hyper_traverse_args **)malloc(MAX_THREADS * sizeof(hyper_traverse_args *));
     for (t = 0; t < MAX_THREADS; t++) {
@@ -137,7 +143,7 @@ int main(int argc, char *argv[]) {
     for (t = 0; t < MAX_THREADS; t++) {
         pthread_join(thread_ids[t], NULL);
     }
-    printf("Tree scanning finished in: %ld seconds!\n\n", time(NULL) - start_t);
+    // printf("Tree scanning finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
 
     // Print all leafs!
     // for (t = 0; t < MAX_THREADS; t++) {

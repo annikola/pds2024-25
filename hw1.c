@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include "/usr/local/MATLAB/R2024b/extern/include/mat.h"
 
-#define MAX_THREADS 5
+#define MAX_THREADS 4
 #define MAX_SET_SPLIT 2
 #define MIN_ARGS 5
 #define MIN_FEATURE 1.0
@@ -29,6 +29,7 @@ typedef struct {
     double *q_point;
 } hyper_traverse_args;
 
+int compare_rows(const void *a, const void *b);
 void *hyper_binary_traverse(void *traverse_args);
 struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point);
 void *hyper_binary_split(void *hyper_subset);
@@ -41,12 +42,14 @@ void *distance_calculator(void *args);
 int main(int argc, char *argv[]) {
 
     int i, j, t;
-    int c_size, d;
+    int c_size, d, leafs_size;
     int q_size, depth;
+    int **leafs;
     // size_t c_size, d;
     double elapsed;
     double **c, **q;
     pthread_t thread_ids[MAX_THREADS];
+    clock_t start_t;
     struct timespec start, end;
     struct hyper_set **root_hyper_sets;
     hyper_traverse_args **traverse_args;
@@ -106,6 +109,7 @@ int main(int argc, char *argv[]) {
     /* <-- THA FYGEI STO TELOS!!! */
 
     clock_gettime(CLOCK_MONOTONIC, &start);
+    // start_t = clock();
     root_hyper_sets = (struct hyper_set **)malloc(MAX_THREADS * sizeof(struct hyper_set *));
     for (t = 0; t < MAX_THREADS; t++) {
         root_hyper_sets[t] = malloc(sizeof(struct hyper_set));
@@ -130,7 +134,33 @@ int main(int argc, char *argv[]) {
     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
     printf("Multithreaded application finished in: %lf seconds!\n\n", elapsed);
+    // printf("Multithreaded application finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
     
+    // for (i = 0; i < 10000; i++) {
+    //     traverse_args = (hyper_traverse_args **)malloc(MAX_THREADS * sizeof(hyper_traverse_args *));
+    //     for (t = 0; t < MAX_THREADS; t++) {
+    //         traverse_args[t] = malloc(sizeof(hyper_binary_traverse));
+    //         traverse_args[t]->root = (struct hyper_set *)root_hyper_sets[t];
+    //         traverse_args[t]->leaf = NULL;
+    //         traverse_args[t]->q_point = q[0];
+    //         pthread_create(&thread_ids[t], NULL, hyper_binary_traverse, traverse_args[t]);
+    //     }
+
+    //     for (t = 0; t < MAX_THREADS; t++) {
+    //         pthread_join(thread_ids[t], NULL);
+    //     }
+
+    //     leafs_size = 0;
+    //     for (t = 0; t < MAX_THREADS; t++) {
+    //         leafs_size += traverse_args[t]->leaf->set_size;
+    //     }
+
+    //     leafs = (struct hyper_set **)malloc(leafs_size * sizeof(struct hyper_set *));
+    //     for (t = 0; t < MAX_THREADS; t++) {
+    //         leafs[t] = traverse_args[t]->leaf;
+    //     }
+
+    // }
     traverse_args = (hyper_traverse_args **)malloc(MAX_THREADS * sizeof(hyper_traverse_args *));
     for (t = 0; t < MAX_THREADS; t++) {
         traverse_args[t] = malloc(sizeof(hyper_binary_traverse));
@@ -143,7 +173,23 @@ int main(int argc, char *argv[]) {
     for (t = 0; t < MAX_THREADS; t++) {
         pthread_join(thread_ids[t], NULL);
     }
-    // printf("Tree scanning finished in: %lf seconds!\n\n", (double)(clock() - start_t) / CLOCKS_PER_SEC);
+
+    leafs_size = 0;
+    for (t = 0; t < MAX_THREADS; t++) {
+        leafs_size += traverse_args[t]->leaf->set_size;
+    }
+
+    leafs = (int **)malloc(leafs_size * sizeof(int *));
+    for (t = 0; t < MAX_THREADS; t++) {
+        leafs[t] = traverse_args[t]->leaf->indexes;
+    }
+    // qsort(leafs, (size_t) leafs_size, d * sizeof(int), compare_rows);
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+    printf("Tree scanning finished in: %lf seconds!\n\n", elapsed);
+    // printf("Tree scanning finished in: %lf seconds!\n\n", (double)(clock() - start_t) / (MAX_THREADS * CLOCKS_PER_SEC));
 
     // Print all leafs!
     // for (t = 0; t < MAX_THREADS; t++) {
@@ -156,12 +202,16 @@ int main(int argc, char *argv[]) {
     //     printf("\n\n");
     // }
 
+    free(traverse_args);
     free(c);
     free(q);
     free(root_hyper_sets);
-    free(traverse_args);
 
     return 0;
+}
+
+int compare_rows(const void *a, const void *b) {
+    return memcmp(a, b, 700 * sizeof(int));
 }
 
 void *hyper_binary_traverse(void *traverse_args) {
@@ -187,22 +237,6 @@ struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point) 
         hyper_position += hyper_subset->coeffs[j] * q_point[j];
     }
 
-    // for (i = 0; i < hyper_subset->f_ptr[0]->set_size; i++) {
-    //     for (j = 0; j < hyper_subset->d; j++) {
-    //         printf("%lf ", hyper_subset->f_ptr[0]->neighbors[i][j]);
-    //     }
-    //     printf("\b\n");
-    // }
-    // printf("\n\n");
-
-    // for (i = 0; i < hyper_subset->f_ptr[1]->set_size; i++) {
-    //     for (j = 0; j < hyper_subset->d; j++) {
-    //         printf("%lf ", hyper_subset->f_ptr[1]->neighbors[i][j]);
-    //     }
-    //     printf("\b\n");
-    // }
-    // printf("\n\n");
-
     if (hyper_position > hyper_subset->b_value) {
         return hyper_subset->f_ptr[0];
     } else {
@@ -212,11 +246,13 @@ struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point) 
 
 void *hyper_binary_split(void *hyper_subset_void) {
 
-    int i, j;
+    int i, j, t;
+    int init1, init2;
     double *random_point_1, *random_point_2;
     double *midpoint, *normal_vector;
     double beta, hyper_position;
     struct hyper_set *hyper_subset, *new_hyper_subset_1, *new_hyper_subset_2;
+    pthread_t thread_ids[2];
 
     hyper_subset = (struct hyper_set *)hyper_subset_void;
 
@@ -246,11 +282,11 @@ void *hyper_binary_split(void *hyper_subset_void) {
     hyper_subset->coeffs = normal_vector;
     hyper_subset->b_value = beta;
 
-    new_hyper_subset_1 = (struct hyper_set *)malloc(sizeof(struct hyper_set));
+    new_hyper_subset_1 = malloc(sizeof(struct hyper_set));
     new_hyper_subset_1->indexes = (int *)malloc(hyper_subset->set_size * sizeof(int));
     new_hyper_subset_1->neighbors = (double **)malloc(hyper_subset->set_size * sizeof(double *));
 
-    new_hyper_subset_2 = (struct hyper_set *)malloc(sizeof(struct hyper_set));
+    new_hyper_subset_2 = malloc(sizeof(struct hyper_set));
     new_hyper_subset_2->indexes = (int *)malloc(hyper_subset->set_size * sizeof(int));
     new_hyper_subset_2->neighbors = (double **)malloc(hyper_subset->set_size * sizeof(double *));
 
@@ -286,15 +322,34 @@ void *hyper_binary_split(void *hyper_subset_void) {
     hyper_subset->f_ptr[1] = new_hyper_subset_2;
 
     if (new_hyper_subset_1->set_size > hyper_subset->depth) {
-        hyper_binary_split(new_hyper_subset_1);
+        if (hyper_subset->set_size == 20000) {
+            pthread_create(&thread_ids[0], NULL, hyper_binary_split, new_hyper_subset_1);
+        } else {
+            hyper_binary_split(new_hyper_subset_1);
+        }
     } else {
+        init1 = 0;
         new_hyper_subset_1->f_ptr = NULL;
     }
     
     if (new_hyper_subset_2->set_size > hyper_subset->depth) {
-        hyper_binary_split(new_hyper_subset_2);
+        if (hyper_subset->set_size == 20000) {
+            pthread_create(&thread_ids[1], NULL, hyper_binary_split, new_hyper_subset_2);
+        } else {
+            hyper_binary_split(new_hyper_subset_2);
+        }
+        init2 = 1;
     } else {
+        init2 = 0;
         new_hyper_subset_2->f_ptr = NULL;
+    }
+
+    if (init1 && hyper_subset->set_size == 20000) {
+        pthread_join(thread_ids[0], NULL);
+    }
+    
+    if (init2 && hyper_subset->set_size == 20000) {
+        pthread_join(thread_ids[1], NULL);
     }
 
 }

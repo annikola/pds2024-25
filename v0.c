@@ -5,7 +5,6 @@
 #include <math.h>
 #include <pthread.h>
 #include "/usr/local/MATLAB/R2024b/extern/include/mat.h"
-#include "/opt/opencilk/lib/clang/16/include/cilk/cilk.h"
 
 #define MAX_SET_SPLIT 2
 #define MIN_ARGS 5
@@ -40,6 +39,7 @@ int main(int argc, char *argv[]) {
     double **indexes_matrix;
     struct timespec start, end;
     calculate_distances_args **cd_args;
+    pthread_t q_thread_ids[Q_SPLIT];
     // const char *filename;
 
     /* THA FYGEI STO TELOS!!! --> */
@@ -94,13 +94,31 @@ int main(int argc, char *argv[]) {
 
     /* <-- THA FYGEI STO TELOS!!! */
 
-    // clock_gettime(CLOCK_MONOTONIC, &start);
+    clock_gettime(CLOCK_MONOTONIC, &start);
     
     q_parts = (double ***)malloc(Q_SPLIT * sizeof(double **));
     q_part_size = (int)q_size / Q_SPLIT;
     for (i = 0; i < Q_SPLIT; i++) {
         q_parts[i] = q + i * q_part_size;
     }
+
+    // #pragma omp parallel num_threads(Q_SPLIT)
+    // {
+    //     int thread_id = omp_get_thread_num();
+    //     int startRow = thread_id * q_part_size;
+    //     int endRow = startRow + q_part_size;
+    //     calculate_distances_args *cd_args_p;
+
+    //     cd_args = malloc(sizeof(calculate_distances_args));
+    //     cd_args_p->corpus = c;
+    //     cd_args_p->query_part = q;
+    //     cd_args_p->corpus_size = c_size;
+    //     cd_args_p->query_part_size = q_part_size; // Sto teleutaio part xanetai to ypoloipo...
+    //     cd_args_p->dimensions = d;
+        
+    //     // Each thread processes a different chunk of rows
+    //     calculate_distances(cd_args[0]);
+    // }
 
     cd_args = (calculate_distances_args **)malloc(Q_SPLIT * sizeof(calculate_distances_args *));
     for (i = 0; i < Q_SPLIT; i++) {
@@ -110,10 +128,12 @@ int main(int argc, char *argv[]) {
         cd_args[i]->corpus_size = c_size;
         cd_args[i]->query_part_size = q_part_size; // Sto teleutaio part xanetai to ypoloipo...
         cd_args[i]->dimensions = d;
-        cilk_spawn calculate_distances(cd_args[i]);
+        pthread_create(&q_thread_ids[i], NULL, calculate_distances, cd_args[i]);
     }
 
-    cilk_sync;
+    for (i = 0; i < Q_SPLIT; i++) {
+        pthread_join(q_thread_ids[i], NULL);
+    }
 
     // cd_args = (calculate_distances_args **)malloc(Q_SPLIT * sizeof(calculate_distances_args *));
     // cd_args[0] = malloc(sizeof(calculate_distances_args));
@@ -129,14 +149,14 @@ int main(int argc, char *argv[]) {
     //     cd_args[0]->distances[i] = realloc(cd_args[0]->distances[i], nns * sizeof(double));
     // }
 
-    // write_2D_array_to_matfile("my_c.mat", "C", c, c_size, d);
-    // write_2D_array_to_matfile("my_q.mat", "Q", q, q_size, d);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+    printf("kNN finished in: %lf seconds!\n\n", elapsed);
+
+    write_2D_array_to_matfile("my_c.mat", "C", c, c_size, d);
+    write_2D_array_to_matfile("my_q.mat", "Q", q, q_size, d);
     // write_2D_array_to_matfile("my_dst.mat", "ddd", cd_args[0]->distances, q_size, nns);
-
-    // clock_gettime(CLOCK_MONOTONIC, &end);
-
-    // elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-    // printf("Tree scanning finished in: %lf seconds!\n\n", elapsed);
 
     free(c);
     free(q);

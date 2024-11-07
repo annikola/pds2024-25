@@ -36,10 +36,10 @@ int main(int argc, char *argv[]) {
     int i, j;
     int c_size, q_size, d, q_part_size, knns;
     double elapsed;
-    double **q_parts;
-    double **indexes_matrix;
+    double **q_parts, **c;
+    double **indexes_matrix, **distances_matrix;
     struct timespec start, end;
-    double *C, *Q, *result;
+    double *C, *Q, *D;
     calculate_distances_args **cd_args;
     pthread_t q_thread_ids[Q_SPLIT];
     // const char *filename;
@@ -64,25 +64,36 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    C = (double *)malloc(c_size * d * sizeof(double));
+    Q = C = (double *)malloc(c_size * d * sizeof(double));
     for (i = 0; i < c_size; i++) {
         for (j = 0; j < d; j++) {
             C[i * d + j] = random_double(MIN_FEATURE, MAX_FEATURE);
         }
     }
 
-    Q = (double *)malloc(q_size * d * sizeof(double));
-    for (i = 0; i < q_size; i++) {
+    // This is the format that the matlab_write accepts...
+    c = (double **)malloc(c_size * sizeof(double *));
+    for (i = 0; i < c_size; i++) {
+        c[i] = (double *)malloc(d * sizeof(double));
         for (j = 0; j < d; j++) {
-            Q[i * d + j] = random_double(MIN_FEATURE, MAX_FEATURE);
+            c[i][j] = C[i * d + j];
         }
     }
-    
-    result = (double *)malloc(c_size * q_size * sizeof(double));
+
+    // Q = (double *)malloc(q_size * d * sizeof(double));
+    // for (i = 0; i < q_size; i++) {
+    //     for (j = 0; j < d; j++) {
+    //         Q[i * d + j] = random_double(MIN_FEATURE, MAX_FEATURE);
+    //     }
+    // }
+
+    D = (double *)malloc(c_size * q_size * sizeof(double));
 
     /* <-- THA FYGEI STO TELOS!!! */
 
     clock_gettime(CLOCK_MONOTONIC, &start);
+
+    printf("openBLAS started!\n");
     
     q_parts = (double **)malloc(Q_SPLIT * sizeof(double *));
     q_part_size = (int)q_size / Q_SPLIT;
@@ -131,38 +142,49 @@ int main(int argc, char *argv[]) {
 
     // clock_gettime(CLOCK_MONOTONIC, &start);
 
-    // cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, c_size, c_size, d, 1.0, C, d, C, d, 0.0, result, c_size);
-
     clock_gettime(CLOCK_MONOTONIC, &end);
 
     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
     printf("openBLAS finished in: %lf seconds!\n\n", elapsed);
 
-    // for (int t = 0; t < Q_SPLIT; t++) {
-    //     printf("Result matrix result:\n");
-    //     for (i = 0; i < cd_args[t]->corpus_size; i++) {
-    //         for (j = 0; j < cd_args[t]->query_part_size; j++) {
-    //             printf("%lf ", cd_args[t]->distances[i * cd_args[t]->query_part_size + j]);
-    //         }
-    //         printf("\n");
-    //     }
-    // }
+    for (int t = 0; t < Q_SPLIT; t++) {
+        for (i = 0; i < cd_args[t]->corpus_size; i++) {
+            for (j = 0; j < cd_args[t]->query_part_size; j++) {
+                D[t * Q_SPLIT + i * q_size + j] = cd_args[t]->distances[i * cd_args[t]->query_part_size + j];
+                // printf("%lf ", cd_args[t]->distances[i * cd_args[t]->query_part_size + j]);
+            }
+        }
+    }
 
-    // printf("Result matrix result:\n");
+    distances_matrix = (double **)malloc(c_size * sizeof(double *));
+    for (i = 0; i < c_size; i++) {
+        distances_matrix[i] = (double *)malloc(q_size * sizeof(double));
+        for (j = 0; j < q_size; j++) {
+            distances_matrix[i][j] = D[i * q_size + j];
+        }
+    }
+
+    for (i = 0; i < c_size; i++) {
+        qsort(distances_matrix[i], (size_t)q_size, sizeof(double), qsort_compare);
+        distances_matrix[i] = realloc(distances_matrix[i], knns * sizeof(double));
+    }
+
+    // printf("Distance matrix: \n");
     // for (i = 0; i < c_size; i++) {
-    //     for (j = 0; j < c_size; j++) {
-    //         result[i * c_size + j] = random_double(MIN_FEATURE, MAX_FEATURE);
-    //         printf("%f ", result[i * c_size + j]);
+    //     for (j = 0; j < q_size; j++) {
+    //         printf("%lf ", D[i * c_size + j]);
     //     }
     //     printf("\n");
     // }
+    // printf("\n");
 
-    // write_2D_array_to_matfile("my_c.mat", "C", c, c_size, d);
+    write_2D_array_to_matfile("my_c.mat", "C", c, c_size, d);
     // write_2D_array_to_matfile("my_q.mat", "Q", q, q_size, d);
-    // write_2D_array_to_matfile("my_dst.mat", "ddd", cd_args[0]->distances, q_size, nns);
+    write_2D_array_to_matfile("my_dst.mat", "ddd", distances_matrix, c_size, knns);
 
-    // free(C);
+    free(C);
     // free(Q);
+    free(cd_args);
 
     return 0;
 }
@@ -220,15 +242,22 @@ void *calculate_distances(void *args) {
     q_norms = calculate_norms(cd_args->query_part, cd_args->query_part_size, cd_args->dimensions);
 
     distances_part_matrix = (double *)malloc(cd_args->corpus_size * cd_args->query_part_size * sizeof(double));
-    for (i = 0; i < cd_args->corpus_size; ++i) {
-        for (j = 0; j < cd_args->query_part_size; ++j) {
+    for (i = 0; i < cd_args->corpus_size; i++) {
+        for (j = 0; j < cd_args->query_part_size; j++) {
             distances_part_matrix[i * cd_args->query_part_size + j] = c_norms[i] + q_norms[j] + matrixmul[i * cd_args->query_part_size + j];
-            // Take the square root to get the Euclidean distance
-            distances_part_matrix[i * cd_args->query_part_size + j] = sqrt(distances_part_matrix[i * cd_args->query_part_size + j]);
+            
+            // Check if the value to be squared is slightly below zero...(UNDERFLOW!!!)
+            if (distances_part_matrix[i * cd_args->query_part_size + j] < 0) {
+                distances_part_matrix[i * cd_args->query_part_size + j] = 0.0;
+            } else {
+                distances_part_matrix[i * cd_args->query_part_size + j] = sqrt(distances_part_matrix[i * cd_args->query_part_size + j]);
+            }
         }
     }
 
-    // qsort(distances_part_matrix, (size_t)cd_args->corpus_size, sizeof(double), qsort_compare);
+    // for (i = 0; i < ; i++) {
+    //     qsort(distances_part_matrix, (size_t)cd_args->corpus_size, sizeof(double), qsort_compare);
+    // }
     // cd_args->distances = realloc(distances_part_matrix, cd_args->knns * sizeof(double));
 
     cd_args->distances = distances_part_matrix;

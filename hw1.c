@@ -330,6 +330,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
     } else {
         init1 = 0;
         new_hyper_subset_1->f_ptr = NULL;
+        // Strict kNN search!
     }
     
     if (new_hyper_subset_2->set_size > hyper_subset->depth) {
@@ -342,6 +343,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
     } else {
         init2 = 0;
         new_hyper_subset_2->f_ptr = NULL;
+        // Strict kNN search!
     }
 
     if (init1 && hyper_subset->set_size == 20000) {

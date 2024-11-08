@@ -15,9 +15,16 @@
 #define MAX_GB 1
 
 typedef struct {
+    double *neighbors;
+    double *distances;
+    double *coordinates;
+    int index;
+} Point;
+
+typedef struct {
     double *corpus;
     double *query_part;
-    double *distances;
+    Point *query_part_points;
     int corpus_size;
     int query_part_size;
     int dimensions;
@@ -36,10 +43,9 @@ int main(int argc, char *argv[]) {
     int i, j;
     int c_size, q_size, d, q_part_size, knns;
     double elapsed;
-    double **q_parts, **c;
-    double **indexes_matrix, **distances_matrix;
+    double **q_parts, **my_c, **my_idx, **my_dst;
     struct timespec start, end;
-    double *C, *Q, *D;
+    double *C, *Q;
     calculate_distances_args **cd_args;
     pthread_t q_thread_ids[Q_SPLIT];
     // const char *filename;
@@ -72,11 +78,11 @@ int main(int argc, char *argv[]) {
     }
 
     // This is the format that the matlab_write accepts...
-    c = (double **)malloc(c_size * sizeof(double *));
+    my_c = (double **)malloc(c_size * sizeof(double *));
     for (i = 0; i < c_size; i++) {
-        c[i] = (double *)malloc(d * sizeof(double));
+        my_c[i] = (double *)malloc(d * sizeof(double));
         for (j = 0; j < d; j++) {
-            c[i][j] = C[i * d + j];
+            my_c[i][j] = C[i * d + j];
         }
     }
 
@@ -87,13 +93,11 @@ int main(int argc, char *argv[]) {
     //     }
     // }
 
-    D = (double *)malloc(c_size * q_size * sizeof(double));
-
     /* <-- THA FYGEI STO TELOS!!! */
 
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    printf("openBLAS started!\n");
+    printf("k-NN search started!\n");
     
     q_parts = (double **)malloc(Q_SPLIT * sizeof(double *));
     q_part_size = (int)q_size / Q_SPLIT;
@@ -108,6 +112,7 @@ int main(int argc, char *argv[]) {
         cd_args[i]->query_part = q_parts[i];
         cd_args[i]->corpus_size = c_size;
         cd_args[i]->query_part_size = q_part_size; // Sto teleutaio part xanetai to ypoloipo...
+        cd_args[i]->query_part_points = (Point *)malloc(q_part_size * sizeof(Point));
         cd_args[i]->dimensions = d;
         cd_args[i]->knns = knns;
         pthread_create(&q_thread_ids[i], NULL, calculate_distances, cd_args[i]);
@@ -117,73 +122,34 @@ int main(int argc, char *argv[]) {
         pthread_join(q_thread_ids[i], NULL);
     }
 
-    // clock_gettime(CLOCK_MONOTONIC, &start);
-
-    // cd_args = (calculate_distances_args **)malloc(Q_SPLIT * sizeof(calculate_distances_args *));
-    // cd_args[0] = malloc(sizeof(calculate_distances_args));
-    // cd_args[0]->corpus = c;
-    // cd_args[0]->query_part = q;
-    // cd_args[0]->corpus_size = c_size;
-    // cd_args[0]->query_part_size = q_size; // Sto teleutaio part xanetai to ypoloipo...
-    // cd_args[0]->dimensions = d;
-    // calculate_distances(cd_args[0]);
-
-    // for (i = 0; i < Q_SPLIT; i++) {
-    //     for (j = 0; j < cd_args[i]->query_part_size; j++) {
-    //         qsort(cd_args[i]->distances[j], (size_t)c_size, sizeof(double), qsort_compare);
-    //         cd_args[i]->distances[j] = realloc(cd_args[i]->distances[j], nns * sizeof(double));
-    //     }
-    // }
-
-    // clock_gettime(CLOCK_MONOTONIC, &end);
-
-    // elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-    // printf("kNN finished in: %lf seconds!\n\n", elapsed);
-
-    // clock_gettime(CLOCK_MONOTONIC, &start);
-
     clock_gettime(CLOCK_MONOTONIC, &end);
-
     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-    printf("openBLAS finished in: %lf seconds!\n\n", elapsed);
+    printf("k-NN search finished in: %lf seconds!\n\n", elapsed);
 
+    my_dst = (double **)malloc(q_size * sizeof(double *));
     for (int t = 0; t < Q_SPLIT; t++) {
-        for (i = 0; i < cd_args[t]->corpus_size; i++) {
-            for (j = 0; j < cd_args[t]->query_part_size; j++) {
-                D[t * Q_SPLIT + i * q_size + j] = cd_args[t]->distances[i * cd_args[t]->query_part_size + j];
-                // printf("%lf ", cd_args[t]->distances[i * cd_args[t]->query_part_size + j]);
+        for (i = 0; i < q_part_size; i++) {
+            my_dst[i + t * q_part_size] = (double *)malloc(knns * sizeof(double));
+            for (j = 0; j < knns; j++) {
+                my_dst[i][j] = cd_args[t]->query_part_points[i].distances[j];
             }
         }
     }
 
-    distances_matrix = (double **)malloc(c_size * sizeof(double *));
-    for (i = 0; i < c_size; i++) {
-        distances_matrix[i] = (double *)malloc(q_size * sizeof(double));
-        for (j = 0; j < q_size; j++) {
-            distances_matrix[i][j] = D[i * q_size + j];
-        }
-    }
+    printf("Writing to mat files...\n");
 
-    for (i = 0; i < c_size; i++) {
-        qsort(distances_matrix[i], (size_t)q_size, sizeof(double), qsort_compare);
-        distances_matrix[i] = realloc(distances_matrix[i], knns * sizeof(double));
-    }
-
-    // printf("Distance matrix: \n");
-    // for (i = 0; i < c_size; i++) {
-    //     for (j = 0; j < q_size; j++) {
-    //         printf("%lf ", D[i * c_size + j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-
-    write_2D_array_to_matfile("my_c.mat", "C", c, c_size, d);
+    write_2D_array_to_matfile("my_c.mat", "C", my_c, c_size, d);
     // write_2D_array_to_matfile("my_q.mat", "Q", q, q_size, d);
-    write_2D_array_to_matfile("my_dst.mat", "ddd", distances_matrix, c_size, knns);
+    write_2D_array_to_matfile("my_dst.mat", "ddd", my_dst, q_size, knns);
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+    printf("Total time: %lf seconds!\n", elapsed);
 
     free(C);
     // free(Q);
+    free(my_dst);
+    free(my_c);
     free(cd_args);
 
     return 0;
@@ -230,37 +196,57 @@ double *calculate_norms(double *matrix2D, int m_size, int d) {
 void *calculate_distances(void *args) {
 
     int i, j, k;
+    int *indexes_part_matrix;
     double *distances_part_matrix, *c_norms, *q_norms, *matrixmul;
     calculate_distances_args *cd_args;
+    Point *q_part_points;
 
     cd_args = (calculate_distances_args *)args;
 
     matrixmul = (double *)malloc(cd_args->corpus_size * cd_args->query_part_size * sizeof(double));
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, cd_args->corpus_size, cd_args->query_part_size, cd_args->dimensions, -2.0, cd_args->corpus, cd_args->dimensions, cd_args->query_part, cd_args->dimensions, 0.0, matrixmul, cd_args->query_part_size);
-    
+    // cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, cd_args->corpus_size, cd_args->query_part_size, cd_args->dimensions, -2.0, cd_args->corpus, cd_args->dimensions, cd_args->query_part, cd_args->dimensions, 0.0, matrixmul, cd_args->query_part_size);
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, cd_args->query_part_size, cd_args->corpus_size, cd_args->dimensions, -2.0, cd_args->query_part, cd_args->dimensions, cd_args->corpus, cd_args->dimensions, 0.0, matrixmul, cd_args->corpus_size);
+
     c_norms = calculate_norms(cd_args->corpus, cd_args->corpus_size, cd_args->dimensions);
     q_norms = calculate_norms(cd_args->query_part, cd_args->query_part_size, cd_args->dimensions);
 
-    distances_part_matrix = (double *)malloc(cd_args->corpus_size * cd_args->query_part_size * sizeof(double));
-    for (i = 0; i < cd_args->corpus_size; i++) {
-        for (j = 0; j < cd_args->query_part_size; j++) {
-            distances_part_matrix[i * cd_args->query_part_size + j] = c_norms[i] + q_norms[j] + matrixmul[i * cd_args->query_part_size + j];
+    distances_part_matrix = (double *)malloc(cd_args->query_part_size * cd_args->corpus_size * sizeof(double));
+    for (i = 0; i < cd_args->query_part_size; i++) {
+        for (j = 0; j < cd_args->corpus_size; j++) {
+            distances_part_matrix[i * cd_args->corpus_size + j] = q_norms[i] + c_norms[j] + matrixmul[i * cd_args->corpus_size + j];
             
             // Check if the value to be squared is slightly below zero...(UNDERFLOW!!!)
-            if (distances_part_matrix[i * cd_args->query_part_size + j] < 0) {
-                distances_part_matrix[i * cd_args->query_part_size + j] = 0.0;
+            if (distances_part_matrix[i * cd_args->corpus_size + j] < 0) {
+                distances_part_matrix[i * cd_args->corpus_size + j] = 0.0;
             } else {
-                distances_part_matrix[i * cd_args->query_part_size + j] = sqrt(distances_part_matrix[i * cd_args->query_part_size + j]);
+                distances_part_matrix[i * cd_args->corpus_size + j] = sqrt(distances_part_matrix[i * cd_args->corpus_size + j]);
             }
         }
     }
 
-    // for (i = 0; i < ; i++) {
-    //     qsort(distances_part_matrix, (size_t)cd_args->corpus_size, sizeof(double), qsort_compare);
-    // }
-    // cd_args->distances = realloc(distances_part_matrix, cd_args->knns * sizeof(double));
+    indexes_part_matrix = (int *)malloc(cd_args->query_part_size * cd_args->corpus_size * sizeof(int));
+    for (i = 0; i < cd_args->query_part_size; i++) {
+        q_part_points[i].distances = distances_part_matrix + i * cd_args->corpus_size;
+        for (j = 0; j < cd_args->corpus_size; j++)
+            q_part_points[i].neighbors[j] = i * cd_args->corpus_size + j;
+    }
 
-    cd_args->distances = distances_part_matrix;
+    for (i = 0; i < cd_args->query_part_size; i++) {
+        qsort(q_part_points[i], (size_t)cd_args->corpus_size, sizeof(double), qsort_compare);
+    }
+
+    // for (i = 0; i < cd_args->query_part_size; i++) {
+    //     for (j = 0; j < cd_args->corpus_size; j++) {
+    //         printf("%lf ", distances_part_matrix[i * cd_args->corpus_size + j]);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n");
+
+    for (i = 0; i < cd_args->query_part_size; i++) {
+        cd_args->query_part_points[i].distances = (double *)malloc(cd_args->knns * sizeof(double));
+        memcpy(cd_args->query_part_points[i].distances, distances_part_matrix + i * cd_args->corpus_size, (size_t)cd_args->knns * sizeof(double));
+    }
 }
 
 double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d) {

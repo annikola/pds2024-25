@@ -8,9 +8,7 @@
 
 #define MAX_THREADS 4
 #define MAX_SET_SPLIT 2
-#define MIN_ARGS 5
-#define MIN_FEATURE 1.0
-#define MAX_FEATURE 100.0
+#define MIN_ARGS 2
 
 struct hyper_set {
     double **neighbors;
@@ -34,16 +32,14 @@ void *hyper_binary_traverse(void *traverse_args);
 struct hyper_set *hyper_search(struct hyper_set *hyper_subset, double *q_point);
 void *hyper_binary_split(void *hyper_subset);
 int is_duplicate(double *point1, double *point2, int d);
+void *distance_calculator(void *args);
 double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
-double random_double(double min, double max);
-void *distance_calculator(void *args);
 
 int main(int argc, char *argv[]) {
 
-    int i, j, t;
-    int c_size, d, leafs_size;
-    int q_size, depth;
+    int i, j, t, leafs_size, depth;
+    size_t c_size, d;
     int **leafs;
     // size_t c_size, d;
     double elapsed;
@@ -53,7 +49,7 @@ int main(int argc, char *argv[]) {
     struct timespec start, end;
     struct hyper_set **root_hyper_sets;
     hyper_traverse_args **traverse_args;
-    // const char *filename;
+    const char *filename;
 
     /* THA FYGEI STO TELOS!!! --> */
     
@@ -62,41 +58,10 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    srand(time(0));
+    filename = argv[1];
+    depth = atoi(argv[2]);
 
-    // filename = &argv[1];
-    c_size = atoi(argv[1]);
-    q_size = atoi(argv[2]);
-    d = atoi(argv[3]);
-    depth = atoi(argv[4]);
-
-    c = (double **)malloc(c_size * sizeof(double *));
-    for (i = 0; i < c_size; i++) {
-        c[i] = (double *)malloc(d * sizeof(double));
-    }
-
-    for (i = 0; i < c_size; i++) {
-        for (j = 0; j < d; j++) {
-            c[i][j] = random_double(1.0, 100.0);
-        }
-    }
-
-    // c = read_2D_array_from_matfile("big_set.mat", &c_size, &d);
-
-    q = (double **)malloc(q_size * sizeof(double *));
-    for (j = 0; j < q_size; j++) {
-        q[j] = (double *)malloc(d * sizeof(double));
-    }
-
-    for (i = 0; i < q_size; i++) {
-        for (j = 0; j < d; j++) {
-            q[i][j] = random_double(MIN_FEATURE, MAX_FEATURE);
-        }
-    }
-
-    // write_2D_array_to_matfile("test.mat", "C", c, c_size, d);
-    // write_2D_array_to_matfile("test2.mat", "Q", q, q_size, d);
-    // printf("\n");
+    c = read_2D_array_from_matfile("big_set.mat", &c_size, &d);
 
     // for (i = 0; i < c_size; i++) {
     //     for (j = 0; j < d; j++) {
@@ -367,115 +332,4 @@ int is_duplicate(double *point1, double *point2, int d) {
     }
 
     return 1;
-}
-
-double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d) {
-
-    MATFile *pmat;
-    mxArray *array_ptr;
-    size_t i, j;
-    double *data;
-    double **c;
-    const char *varname = "C"; // Name of the variable to read
-
-    pmat = matOpen(filename, "r");
-    if (pmat == NULL) {
-        fprintf(stderr, "Error opening file data.mat\n");
-        return NULL;
-    }
-
-    // Read a variable from the .mat file
-    array_ptr = matGetVariable(pmat, varname);
-    if (array_ptr == NULL) {
-        fprintf(stderr, "Error reading variable %s from file\n", varname);
-        matClose(pmat);
-        return NULL;
-    }
-
-    // Check if the variable is of the expected type (for example, double matrix)
-    if (mxIsDouble(array_ptr) && !mxIsComplex(array_ptr)) {
-        // Get the data pointer and array dimensions
-        data = mxGetPr(array_ptr);
-        size_t rows = mxGetM(array_ptr);
-        size_t cols = mxGetN(array_ptr);
-
-        *c_size = rows;
-        *d = cols;
-
-        c = (double **)malloc(rows * sizeof(double *));
-        for (i = 0; i < rows; i++) {
-            c[i] = (double *)malloc(cols * sizeof(double));
-        }
-
-        for (i = 0; i < rows; i++) {
-            for (j = 0; j < cols; j++) {
-                c[i][j] = data[i + j * rows];
-            }
-        }
-    } else {
-        fprintf(stderr, "Variable %s is not a double matrix\n", varname);
-        return NULL;
-    }
-
-    // Clean up
-    mxDestroyArray(array_ptr); // Free the mxArray
-    matClose(pmat);            // Close the MAT-file
-
-    return c;
-}
-
-void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d) {
-
-    int i, j;
-    double *matData;
-    MATFile *matFile;
-    mxArray *matArray;
-
-    matFile = matOpen(filename, "w");
-    if (matFile == NULL) {
-        printf("Error opening MAT-file %s\n", filename);
-        return;
-    }
-
-    matArray = mxCreateDoubleMatrix(c_size, d, mxREAL);
-    if (matArray == NULL) {
-        printf("Could not create mxArray.\n");
-        matClose(matFile);
-        return;
-    }
-
-    // matData = mxGetPr(matArray);
-    // for (i = 0; i < c_size; i++) {
-    //     memcpy(matData + i * d, _2D_array[i], d * sizeof(double));
-    // }
-
-    // MATLAB saves in column major order, therefore we take the transpose...
-    matData = mxGetPr(matArray);
-    for (i = 0; i < c_size; i++) {
-        for (j = 0; j < d; j++) {
-            matData[j * c_size + i] = _2D_array[i][j];
-        }
-    }
-
-    matPutVariable(matFile, array_name, matArray);
-
-    mxDestroyArray(matArray);
-    matClose(matFile);
-    printf("2D array written to %s successfully.\n", filename);
-}
-
-double random_double(double min, double max) {
-
-    double scale;
-
-    scale = rand() / (double) RAND_MAX;
-
-    return min + scale * (max - min);
-}
-
-void *distance_calculator(void *args) {
-
-    int i, j;
-
-    printf("Thread finished!\n");
 }

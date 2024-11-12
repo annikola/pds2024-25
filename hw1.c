@@ -42,10 +42,11 @@ void write_2D_array_to_matfile(const char *filename, const char *array_name, dou
 
 int main(int argc, char *argv[]) {
 
+    int i, j;
     int knns, depth, delta;
     size_t c_size, d;
     double elapsed;
-    double **c, **q;
+    double **c, **my_idx, **my_dst;
     clock_t start_t;
     struct timespec start, end;
     hyper_set *root_hyper_set;
@@ -66,7 +67,6 @@ int main(int argc, char *argv[]) {
 
     printf("Reading the corpus...\n");
     c = read_2D_array_from_matfile(filename, &c_size, &d);
-    q = c;
 
     // for (i = 0; i < c_size; i++) {
     //     for (j = 0; j < d; j++) {
@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
 
     srand(time(0));
 
-    c_points = (Point **)malloc(sizeof(Point *));
+    c_points = (Point **)malloc(c_size * sizeof(Point *));
     _2D_array_to_points(c_points, c, c_size, d);
 
     root_hyper_set = malloc(sizeof(hyper_set));
@@ -96,7 +96,23 @@ int main(int argc, char *argv[]) {
     root_hyper_set->depth = depth;
     root_hyper_set->delta = delta;
     hyper_binary_split(root_hyper_set);
-    printf("Neighbor distance: %lf\n", c_points[0]->neighbors[1].distance);
+
+    // for (i = 0; i < c_size; i++) {
+    //     printf("%d: ", i + 1);
+    //     for (j = 0; j < knns; j++) {
+    //         printf("%lf ", c_points[i]->neighbors[j].distance);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n");
+
+    // for (i = 0; i < c_size; i++) {
+    //     for (j = 0; j < knns; j++) {
+    //         printf("%d ", c_points[i]->neighbors[j].index);
+    //     }
+    //     printf("\b\n");
+    // }
+    // printf("\n");
 
     clock_gettime(CLOCK_MONOTONIC, &end);
 
@@ -104,8 +120,27 @@ int main(int argc, char *argv[]) {
     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
     printf("Multithreaded application finished in: %lf seconds!\n\n", elapsed);
+
+    printf("Fixing files format...\n");
+    my_idx = (double **)malloc(c_size * sizeof(double *));
+    my_dst = (double **)malloc(c_size * sizeof(double *));
+    for (i = 0; i < c_size; i++) {
+        my_idx[i] = (double *)malloc(knns * sizeof(double));
+        my_dst[i] = (double *)malloc(knns * sizeof(double));
+        for (j = 0; j < knns; j++) {
+            my_idx[i][j] = (double)c_points[i]->neighbors[j].index;
+            my_dst[i][j] = c_points[i]->neighbors[j].distance;
+        }
+    }
+
+    printf("Writing to mat files...\n");
+    // write_2D_array_to_matfile("my_c.mat", "C", c, c_size, d);
+    write_2D_array_to_matfile("my_idx.mat", "iii", my_idx, c_size, knns);
+    write_2D_array_to_matfile("my_dst.mat", "ddd", my_dst, c_size, knns);
     
     free(c);
+    free(my_idx);
+    free(my_dst);
     free(root_hyper_set);
 
     return 0;
@@ -117,8 +152,8 @@ void _2D_array_to_points(Point **c_points, double **c, size_t c_size, size_t d) 
 
     for (i = 0; i < c_size; i++) {
         c_points[i] = (Point *)malloc(sizeof(Point));
-        c_points[i]->index = i + 1;
         c_points[i]->coordinates = (double *)malloc(d * sizeof(double));
+        c_points[i]->index = i + 1; // Ti kai an mpei stin apo panw grammi?
         for (j = 0; j < d; j++) {
             c_points[i]->coordinates[j] = c[i][j];
         }
@@ -180,11 +215,11 @@ void *hyper_binary_split(void *hyper_subset_void) {
     new_hyper_subset_2 = malloc(sizeof(hyper_set));
     new_hyper_subset_2->points = (Point **)malloc(hyper_subset->set_size * sizeof(Point *));
 
+    new_hyper_subset_1->set_size = new_hyper_subset_2->set_size = 0;
+    new_hyper_subset_1->d = new_hyper_subset_2->d = hyper_subset->d;
     new_hyper_subset_1->knns = new_hyper_subset_2->knns = hyper_subset->knns;
     new_hyper_subset_1->depth = new_hyper_subset_2->depth = hyper_subset->depth;
     new_hyper_subset_1->delta = new_hyper_subset_2->delta = hyper_subset->delta;
-    new_hyper_subset_1->d = new_hyper_subset_2->d = hyper_subset->d;
-    new_hyper_subset_1->set_size = new_hyper_subset_2->set_size = 0;
     edge_points = (Point **)malloc(hyper_subset->set_size * sizeof(Point *));
     edge_points_size = 0;
     for (i = 0; i < hyper_subset->set_size; i++) {
@@ -238,11 +273,11 @@ void *hyper_binary_split(void *hyper_subset_void) {
 
     // Edw exw ypologisei hdh dyo strict knns...
     // Apo edw kai katw kanw to DUMB pros to paron stitch...
-    printf("Stitching NH1 and NH2...\n");
-    C3 = (double *)malloc(edge_points_size * new_hyper_subset_2->d * sizeof(double));
-    _points_to_2D_mono_array(C3, edge_points, edge_points_size, hyper_subset->d);
-    knn_search(C3, C3, edge_points_size, edge_points_size, hyper_subset->d, hyper_subset->knns, edge_points);
-    free(C3);
+    // printf("Stitching NH1 and NH2...\n");
+    // C3 = (double *)malloc(edge_points_size * new_hyper_subset_2->d * sizeof(double));
+    // _points_to_2D_mono_array(C3, edge_points, edge_points_size, hyper_subset->d);
+    // knn_search(C3, C3, edge_points_size, edge_points_size, hyper_subset->d, hyper_subset->knns, edge_points);
+    // free(C3);
 }
 
 int is_duplicate(double *point1, double *point2, int d) {

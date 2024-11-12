@@ -23,6 +23,7 @@ typedef struct {
 typedef struct {
     double *corpus;
     double *query_part;
+    Point **corpus_points;
     Point **query_part_points;
     int corpus_size;
     int query_part_size;
@@ -96,7 +97,7 @@ void *calculate_distances(void *args) {
         // if STITCHING REALLOC!!!
         cd_args->query_part_points[i]->neighbors = (Neighbor *)malloc(cd_args->corpus_size * sizeof(Neighbor));
         for (j = 0; j < cd_args->corpus_size; j++) {
-            cd_args->query_part_points[i]->neighbors[j].index = j + 1; // BIG CHANGE!!!
+            cd_args->query_part_points[i]->neighbors[j].index = cd_args->corpus_points[j]->index; // BIG CHANGE!!!
             cd_args->query_part_points[i]->neighbors[j].distance = distances_part_matrix[i * cd_args->corpus_size + j];
         }
     }
@@ -108,7 +109,7 @@ void *calculate_distances(void *args) {
 
     // for (i = 0; i < cd_args->query_part_size; i++) {
     //     for (j = 0; j < cd_args->knns; j++) {
-    //         printf("%lf ", cd_args->query_part_points[i].neighbors[j].distance);
+    //         printf("%d ", cd_args->query_part_points[i]->neighbors[j].index);
     //     }
     //     printf("\b\n");
     // }
@@ -120,7 +121,7 @@ void *calculate_distances(void *args) {
 
 void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points) {
 
-    int i, j, t, q_part_size, split_factor;
+    int i, j, q_part_size, split_factor;
     double **q_parts;
     pthread_t q_thread_ids[Q_SPLIT];
     calculate_distances_args **cd_args;
@@ -149,7 +150,12 @@ void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, P
         cd_args[i]->corpus = C;
         cd_args[i]->query_part = q_parts[i];
         cd_args[i]->corpus_size = c_size;
-        cd_args[i]->query_part_size = q_part_size; // Sto teleutaio part xanetai to ypoloipo...
+        if (i == split_factor - 1 && q_size > Q_SPLIT) {
+            cd_args[i]->query_part_size = q_part_size + q_size % Q_SPLIT; // Sto teleutaio part prostithetai kai to ypoloipo...
+        } else {
+            cd_args[i]->query_part_size = q_part_size;
+        }
+        cd_args[i]->corpus_points = set_points;
         cd_args[i]->query_part_points = set_points_parts[i];
         cd_args[i]->dimensions = d;
         cd_args[i]->knns = knns;
@@ -161,17 +167,6 @@ void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, P
     }
 
     printf("k-NN search finished!\n");
-
-    // for (t = 0; t < split_factor; t++) {
-    //     for (i = 0; i < cd_args[t]->query_part_size; i++) {
-    //         my_idx[i + t * cd_args[t]->query_part_size] = (double *)malloc(knns * sizeof(double));
-    //         my_dst[i + t * cd_args[t]->query_part_size] = (double *)malloc(knns * sizeof(double));
-    //         for (j = 0; j < knns; j++) {
-    //             my_idx[i + t * cd_args[t]->query_part_size][j] = (double)(cd_args[t]->query_part_points[i].neighbors[j].index + 1);
-    //             my_dst[i + t * cd_args[t]->query_part_size][j] = cd_args[t]->query_part_points[i].neighbors[j].distance;
-    //         }
-    //     }
-    // }
 
     free(set_points_parts);
     free(q_parts);

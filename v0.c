@@ -37,7 +37,7 @@ int qsort_compare(const void* a, const void* b);
 double random_double(double min, double max);
 double *calculate_norms(double *matrix2D, int m_size, int d);
 void *calculate_distances(void *args);
-calculate_distances_args **knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns);
+void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, double **my_idx, double **my_dst);
 double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 
@@ -108,37 +108,15 @@ int main(int argc, char *argv[]) {
 
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    cd_args = knn_search(C, Q, c_size, q_size, d, knns);
+    my_idx = (double **)malloc(q_size * sizeof(double *));
+    my_dst = (double **)malloc(q_size * sizeof(double *));
+    knn_search(C, Q, c_size, q_size, d, knns, my_idx, my_dst);
 
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
     printf("k-NN search finished in: %lf seconds!\n\n", elapsed);
 
-    // my_idx = (int **)malloc(q_size * sizeof(int *));
-    // for (int t = 0; t < Q_SPLIT; t++) {
-    //     for (i = 0; i < q_part_size; i++) {
-    //         my_idx[i + t * q_part_size] = (int *)malloc(knns * sizeof(int));
-    //         for (j = 0; j < knns; j++) {
-    //             my_idx[i + t * q_part_size][j] = cd_args[t]->query_part_points[i].neighbors[j].index;
-    //         }
-    //     }
-    // }
-
-    my_idx = (double **)malloc(q_size * sizeof(double *));
-    my_dst = (double **)malloc(q_size * sizeof(double *));
-    for (t = 0; t < Q_SPLIT; t++) {
-        for (i = 0; i < cd_args[t]->query_part_size; i++) {
-            my_idx[i + t * cd_args[t]->query_part_size] = (double *)malloc(knns * sizeof(double));
-            my_dst[i + t * cd_args[t]->query_part_size] = (double *)malloc(knns * sizeof(double));
-            for (j = 0; j < knns; j++) {
-                my_idx[i + t * cd_args[t]->query_part_size][j] = (double)(cd_args[t]->query_part_points[i].neighbors[j].index + 1);
-                my_dst[i + t * cd_args[t]->query_part_size][j] = cd_args[t]->query_part_points[i].neighbors[j].distance;
-            }
-        }
-    }
-
     printf("Writing to mat files...\n");
-
     write_2D_array_to_matfile("my_c.mat", "C", my_c, c_size, d);
     write_2D_array_to_matfile("my_q.mat", "Q", my_q, q_size, d);
     write_2D_array_to_matfile("my_idx.mat", "iii", my_idx, q_size, knns);
@@ -245,9 +223,9 @@ void *calculate_distances(void *args) {
     // }
 }
 
-calculate_distances_args **knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns) {
+void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, double **my_idx, double **my_dst) {
 
-    int i, q_part_size;
+    int i, j, t, q_part_size;
     double **q_parts;
     pthread_t q_thread_ids[Q_SPLIT];
     calculate_distances_args **cd_args;
@@ -277,5 +255,14 @@ calculate_distances_args **knn_search(double *C, double *Q, int c_size, int q_si
         pthread_join(q_thread_ids[i], NULL);
     }
 
-    return cd_args;
+    for (t = 0; t < Q_SPLIT; t++) {
+        for (i = 0; i < cd_args[t]->query_part_size; i++) {
+            my_idx[i + t * cd_args[t]->query_part_size] = (double *)malloc(knns * sizeof(double));
+            my_dst[i + t * cd_args[t]->query_part_size] = (double *)malloc(knns * sizeof(double));
+            for (j = 0; j < knns; j++) {
+                my_idx[i + t * cd_args[t]->query_part_size][j] = (double)(cd_args[t]->query_part_points[i].neighbors[j].index + 1);
+                my_dst[i + t * cd_args[t]->query_part_size][j] = cd_args[t]->query_part_points[i].neighbors[j].distance;
+            }
+        }
+    }
 }

@@ -265,4 +265,6 @@ void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, d
             }
         }
     }
+
+    free(cd_args);
 }

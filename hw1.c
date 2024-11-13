@@ -36,7 +36,7 @@ void _2D_array_to_points(Point **c_points, double **corpus, size_t corpus_size, 
 void _points_to_2D_mono_array(double *C, Point **c_points, size_t c_size, size_t d);
 void *hyper_binary_split(void *hyper_subset);
 int is_duplicate(double *point1, double *point2, int d);
-void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points);
+void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, int stitching);
 double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 
@@ -85,6 +85,10 @@ int main(int argc, char *argv[]) {
 
     c_points = (Point **)malloc(c_size * sizeof(Point *));
     _2D_array_to_points(c_points, c, c_size, d);
+    for (i = 0; i < c_size; i++) {
+        free(c[i]);
+    }
+    free(c);
 
     root_hyper_set = malloc(sizeof(hyper_set));
     root_hyper_set->points = c_points;
@@ -138,7 +142,7 @@ int main(int argc, char *argv[]) {
     write_2D_array_to_matfile("my_idx.mat", "iii", my_idx, c_size, knns);
     write_2D_array_to_matfile("my_dst.mat", "ddd", my_dst, c_size, knns);
     
-    free(c);
+    // free(c);
     free(my_idx);
     free(my_dst);
     free(root_hyper_set);
@@ -243,6 +247,9 @@ void *hyper_binary_split(void *hyper_subset_void) {
         }
     }
 
+    free(normal_vector);
+    free(midpoint);
+
     printf("Number of edge points: %d\n", edge_points_size);
 
     new_hyper_subset_1->points = realloc(new_hyper_subset_1->points, new_hyper_subset_1->set_size * sizeof(Point *));
@@ -257,7 +264,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
     } else {
         C1 = (double *)malloc(new_hyper_subset_1->set_size * new_hyper_subset_1->d * sizeof(double));
         _points_to_2D_mono_array(C1, new_hyper_subset_1->points, new_hyper_subset_1->set_size, new_hyper_subset_1->d);
-        knn_search(C1, C1, new_hyper_subset_1->set_size, new_hyper_subset_1->set_size, new_hyper_subset_1->d, new_hyper_subset_1->knns, new_hyper_subset_1->points);
+        knn_search(C1, C1, new_hyper_subset_1->set_size, new_hyper_subset_1->set_size, new_hyper_subset_1->d, new_hyper_subset_1->knns, new_hyper_subset_1->points, 0);
         free(C1);
     }
     
@@ -267,17 +274,21 @@ void *hyper_binary_split(void *hyper_subset_void) {
     } else {
         C2 = (double *)malloc(new_hyper_subset_2->set_size * new_hyper_subset_2->d * sizeof(double));
         _points_to_2D_mono_array(C2, new_hyper_subset_2->points, new_hyper_subset_2->set_size, new_hyper_subset_2->d);
-        knn_search(C2, C2, new_hyper_subset_2->set_size, new_hyper_subset_2->set_size, new_hyper_subset_2->d, new_hyper_subset_2->knns, new_hyper_subset_2->points);
+        knn_search(C2, C2, new_hyper_subset_2->set_size, new_hyper_subset_2->set_size, new_hyper_subset_2->d, new_hyper_subset_2->knns, new_hyper_subset_2->points, 0);
         free(C2);
     }
 
     // Edw exw ypologisei hdh dyo strict knns...
     // Apo edw kai katw kanw to DUMB pros to paron stitch...
-    // printf("Stitching NH1 and NH2...\n");
-    // C3 = (double *)malloc(edge_points_size * new_hyper_subset_2->d * sizeof(double));
-    // _points_to_2D_mono_array(C3, edge_points, edge_points_size, hyper_subset->d);
-    // knn_search(C3, C3, edge_points_size, edge_points_size, hyper_subset->d, hyper_subset->knns, edge_points);
-    // free(C3);
+    printf("Stitching NH1 and NH2...\n");
+    C3 = (double *)malloc(edge_points_size * hyper_subset->d * sizeof(double));
+    _points_to_2D_mono_array(C3, edge_points, edge_points_size, hyper_subset->d);
+    knn_search(C3, C3, edge_points_size, edge_points_size, hyper_subset->d, hyper_subset->knns, edge_points, 1);
+    free(C3);
+
+    free(new_hyper_subset_1);
+    free(new_hyper_subset_2);
+    free(edge_points);
 }
 
 int is_duplicate(double *point1, double *point2, int d) {

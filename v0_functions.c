@@ -29,12 +29,14 @@ typedef struct {
     int query_part_size;
     int dimensions;
     int knns;
+    int stitching;
 } calculate_distances_args;
 
 int qsort_compare(const void* a, const void* b);
+int is_a_neighbor(Neighbor *neighbors, int knns, int current_index);
 double *calculate_norms(double *matrix2D, int m_size, int d);
 void *calculate_distances(void *args);
-void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points);
+void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, int stitching);
 
 int qsort_compare(const void *a, const void *b) {
     const Neighbor *neighbor1 = (const Neighbor *)a;
@@ -47,6 +49,19 @@ int qsort_compare(const void *a, const void *b) {
     } else {
         return 0;  // they are equal
     }
+}
+
+int is_a_neighbor(Neighbor *neighbors, int knns, int current_index) {
+    
+    int i;
+
+    for (i = 0; i < knns; i++) {
+        if (neighbors[i].index == current_index) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 double *calculate_norms(double *matrix2D, int m_size, int d) {
@@ -67,7 +82,7 @@ double *calculate_norms(double *matrix2D, int m_size, int d) {
 
 void *calculate_distances(void *args) {
 
-    int i, j, k;
+    int i, j;
     double *distances_part_matrix, *c_norms, *q_norms, *matrixmul;
     calculate_distances_args *cd_args;
 
@@ -93,39 +108,51 @@ void *calculate_distances(void *args) {
         }
     }
 
-    for (i = 0; i < cd_args->query_part_size; i++) {
-        // if STITCHING REALLOC!!!
-        cd_args->query_part_points[i]->neighbors = (Neighbor *)malloc(cd_args->corpus_size * sizeof(Neighbor));
-        for (j = 0; j < cd_args->corpus_size; j++) {
-            cd_args->query_part_points[i]->neighbors[j].index = cd_args->corpus_points[j]->index; // BIG CHANGE!!!
-            cd_args->query_part_points[i]->neighbors[j].distance = distances_part_matrix[i * cd_args->corpus_size + j];
+    free(matrixmul);
+    free(c_norms);
+    free(q_norms);
+
+    if (!cd_args->stitching) {
+        for (i = 0; i < cd_args->query_part_size; i++) {
+            cd_args->query_part_points[i]->neighbors = (Neighbor *)malloc(cd_args->corpus_size * sizeof(Neighbor));
+            for (j = 0; j < cd_args->corpus_size; j++) {
+                cd_args->query_part_points[i]->neighbors[j].index = cd_args->corpus_points[j]->index; // BIG CHANGE!!!
+                cd_args->query_part_points[i]->neighbors[j].distance = distances_part_matrix[i * cd_args->corpus_size + j];
+            }
+        }
+
+        for (i = 0; i < cd_args->query_part_size; i++) {
+            qsort(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->corpus_size, sizeof(Neighbor), qsort_compare);
+            cd_args->query_part_points[i]->neighbors = realloc(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->knns * sizeof(Neighbor));
+        }
+    } else {
+        for (i = 0; i < cd_args->query_part_size; i++) {
+            for (j = 0; j < cd_args->corpus_size; j++) {
+                if (!is_a_neighbor(cd_args->query_part_points[i]->neighbors, cd_args->knns, cd_args->corpus_points[j]->index) && (distances_part_matrix[i * cd_args->corpus_size + j] < cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].distance)) {
+                    printf("HERE!\n");
+                    cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].index = cd_args->corpus_points[j]->index;
+                    cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].distance = distances_part_matrix[i * cd_args->corpus_size + j];
+                    qsort(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->knns, sizeof(Neighbor), qsort_compare);
+                }
+            }
         }
     }
 
-    for (i = 0; i < cd_args->query_part_size; i++) {
-        qsort(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->corpus_size, sizeof(Neighbor), qsort_compare);
-        cd_args->query_part_points[i]->neighbors = realloc(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->knns * sizeof(Neighbor));
-    }
-
-    // for (i = 0; i < cd_args->query_part_size; i++) {
-    //     for (j = 0; j < cd_args->knns; j++) {
-    //         printf("%d ", cd_args->query_part_points[i]->neighbors[j].index);
-    //     }
-    //     printf("\b\n");
-    // }
-
     free(distances_part_matrix);
-    free(c_norms);
-    free(q_norms);
 }
 
-void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points) {
+void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, int stitching) {
 
     int i, j, q_part_size, split_factor;
     double **q_parts;
     pthread_t q_thread_ids[Q_SPLIT];
     calculate_distances_args **cd_args;
     Point ***set_points_parts;
+
+    // THEORITIKA DEN EINAI TELEIO GIA C != Q
+    if (c_size <= 1 && q_size <= 1) {
+        return;
+    }
 
     printf("k-NN search started!\n");
     
@@ -159,6 +186,7 @@ void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, P
         cd_args[i]->query_part_points = set_points_parts[i];
         cd_args[i]->dimensions = d;
         cd_args[i]->knns = knns;
+        cd_args[i]->stitching = stitching;
         pthread_create(&q_thread_ids[i], NULL, calculate_distances, cd_args[i]);
     }
 

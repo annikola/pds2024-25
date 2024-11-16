@@ -38,7 +38,7 @@ double random_double(double min, double max);
 double *calculate_norms(double *matrix2D, int m_size, int d);
 void *calculate_distances(void *args);
 void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, double **my_idx, double **my_dst);
-double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d);
+double **read_2D_array_from_matfile(const char *filename, const char *varname, size_t *c_size, size_t *d);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 
 int main(int argc, char *argv[]) {

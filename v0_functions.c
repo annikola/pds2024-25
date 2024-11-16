@@ -118,7 +118,6 @@ void *calculate_distances(void *args) {
             curr_neighbors = cd_args->query_part_points[i]->neighbors;
             cd_args->query_part_points[i]->neighbors = (Neighbor *)malloc(cd_args->knns * sizeof(Neighbor));
             memcpy(cd_args->query_part_points[i]->neighbors, curr_neighbors, cd_args->knns * sizeof(Neighbor));
-            // cd_args->query_part_points[i]->neighbors = realloc(cd_args->query_part_points[i]->neighbors, cd_args->knns * sizeof(Neighbor));
             free(curr_neighbors);
         }
     } else {

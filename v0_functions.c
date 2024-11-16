@@ -24,6 +24,7 @@ typedef struct {
 typedef struct {
     double *corpus;
     double *query_part;
+    Point **all_points;
     Point **corpus_points;
     Point **query_part_points;
     int corpus_size;
@@ -37,7 +38,7 @@ int qsort_compare(const void* a, const void* b);
 int is_a_neighbor(Neighbor *neighbors, int knns, int current_index);
 double *calculate_norms(double *matrix2D, int m_size, int d);
 void *calculate_distances(void *args);
-void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, int stitching);
+void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, Point **all_points, int stitching);
 
 int qsort_compare(const void *a, const void *b) {
     const Neighbor *neighbor1 = (const Neighbor *)a;
@@ -144,7 +145,7 @@ void *calculate_distances(void *args) {
     free(q_norms);
 }
 
-void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, int stitching) {
+void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, Point **all_points, int stitching) {
 
     int i, j, q_part_size, split_factor;
     double **q_parts;
@@ -186,6 +187,7 @@ void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, P
             cd_args[i]->query_part_size = q_part_size;
         }
         cd_args[i]->corpus_points = set_points;
+        cd_args[i]->all_points = all_points;
         cd_args[i]->query_part_points = set_points_parts[i];
         cd_args[i]->dimensions = d;
         cd_args[i]->knns = knns;

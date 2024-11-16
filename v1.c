@@ -21,11 +21,6 @@ typedef struct {
     int index;
 } Point;
 
-struct NeighborsList {
-    struct NeighborsList *f_ptr;
-    int index;
-};
-
 typedef struct {
     double *coeffs;
     double b_value;
@@ -45,7 +40,7 @@ void *hyper_binary_split(void *hyper_subset);
 int qsort_compare(const void* a, const void* b);
 int is_a_neighbor(Neighbor *neighbors, int knns, int current_index);
 int is_duplicate(double *point1, double *point2, int d);
-void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, int stitching);
+void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, Point **all_points, int stitching);
 double **read_2D_array_from_matfile(const char *filename, const char *varname, size_t *c_size, size_t *d);
 void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 
@@ -63,7 +58,6 @@ int main(int argc, char *argv[]) {
     hyper_set *root_hyper_set;
     const char *filename, *varname;
     Point **c_points;
-    struct NeighborsList **reference_list;
     
     if (argc < MIN_ARGS + 1) {
         printf("Not enough arguments provided!\n");
@@ -86,13 +80,6 @@ int main(int argc, char *argv[]) {
     }
     free(c);
 
-    printf("Setting up reference list...\n");
-    reference_list = (struct NeighborsList **)malloc(2 * c_size * sizeof(struct NeighborsList *));
-    for (i = 0; i < 2 * c_size; i += 2) {
-        reference_list[i] = (struct NeighborsList *)malloc(sizeof(struct NeighborsList));
-        reference_list[i + 1] = reference_list[i];
-    }
-
     printf("Initializing the splitting process...\n");
     clock_gettime(CLOCK_MONOTONIC, &start);
 
@@ -101,7 +88,6 @@ int main(int argc, char *argv[]) {
     root_hyper_set = malloc(sizeof(hyper_set));
     root_hyper_set->all_points = c_points;
     root_hyper_set->points = c_points;
-    root_hyper_set->reference_list = reference_list;
     root_hyper_set->set_size = (int)c_size;
     root_hyper_set->d = (int)d;
     root_hyper_set->coeffs = NULL; // Technically a zero-vector...
@@ -110,11 +96,6 @@ int main(int argc, char *argv[]) {
     root_hyper_set->depth = depth;
     root_hyper_set->delta = delta;
     hyper_binary_split(root_hyper_set);
-
-    for (i = 0; i < 2 * c_size; i += 2) {
-        free(reference_list[i]);
-    }
-    free(reference_list);
 
     clock_gettime(CLOCK_MONOTONIC, &end);
 
@@ -224,7 +205,6 @@ void *hyper_binary_split(void *hyper_subset_void) {
     new_hyper_subset_2->points = (Point **)malloc(hyper_subset->set_size * sizeof(Point *));
 
     new_hyper_subset_1->all_points = new_hyper_subset_2->all_points = hyper_subset->all_points;
-    // new_hyper_subset_1->reference_list = new_hyper_subset_2->reference_list = hyper_subset->reference_list;
     new_hyper_subset_1->set_size = new_hyper_subset_2->set_size = 0;
     new_hyper_subset_1->d = new_hyper_subset_2->d = hyper_subset->d;
     new_hyper_subset_1->knns = new_hyper_subset_2->knns = hyper_subset->knns;
@@ -276,7 +256,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
     } else {
         C1 = (double *)malloc(new_hyper_subset_1->set_size * new_hyper_subset_1->d * sizeof(double));
         _points_to_2D_mono_array(C1, new_hyper_subset_1->points, new_hyper_subset_1->set_size, new_hyper_subset_1->d);
-        knn_search(C1, C1, new_hyper_subset_1->set_size, new_hyper_subset_1->set_size, new_hyper_subset_1->d, new_hyper_subset_1->knns, new_hyper_subset_1->points, 0);
+        knn_search(C1, C1, new_hyper_subset_1->set_size, new_hyper_subset_1->set_size, new_hyper_subset_1->d, new_hyper_subset_1->knns, new_hyper_subset_1->points, hyper_subset->all_points, 0);
         free(C1);
     }
 
@@ -286,7 +266,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
     } else {
         C2 = (double *)malloc(new_hyper_subset_2->set_size * new_hyper_subset_2->d * sizeof(double));
         _points_to_2D_mono_array(C2, new_hyper_subset_2->points, new_hyper_subset_2->set_size, new_hyper_subset_2->d);
-        knn_search(C2, C2, new_hyper_subset_2->set_size, new_hyper_subset_2->set_size, new_hyper_subset_2->d, new_hyper_subset_2->knns, new_hyper_subset_2->points, 0);
+        knn_search(C2, C2, new_hyper_subset_2->set_size, new_hyper_subset_2->set_size, new_hyper_subset_2->d, new_hyper_subset_2->knns, new_hyper_subset_2->points, hyper_subset->all_points, 0);
         free(C2);
     }
 
@@ -298,38 +278,8 @@ void *hyper_binary_split(void *hyper_subset_void) {
     printf("Number of edge points: %d\n", edge_points_size);
     C3 = (double *)malloc(edge_points_size * hyper_subset->d * sizeof(double));
     _points_to_2D_mono_array(C3, edge_points, edge_points_size, hyper_subset->d);
-    knn_search(C3, C3, edge_points_size, edge_points_size, hyper_subset->d, hyper_subset->knns, edge_points, 1);
+    knn_search(C3, C3, edge_points_size, edge_points_size, hyper_subset->d, hyper_subset->knns, edge_points, hyper_subset->all_points, 1);
     free(C3);
-
-
-
-    // for (i = 0; i < hyper_subset->set_size; i++) {
-    //     for (j = 0; j < hyper_subset->knns; j++) {
-
-    //         if (hyper_subset->points[i]->neighbors[j].index == hyper_subset->points[i]->index) {
-    //             continue;
-    //         }
-
-    //         hyper_subset->reference_list[2 * hyper_subset->points[i]->neighbors[j].index - 1]->index = hyper_subset->points[i]->index;
-    //         hyper_subset->reference_list[2 * hyper_subset->points[i]->neighbors[j].index - 1]->f_ptr = (struct NeighborsList *)malloc(sizeof(struct NeighborsList));
-    //         hyper_subset->reference_list[2 * hyper_subset->points[i]->neighbors[j].index - 1] = hyper_subset->reference_list[2 * hyper_subset->points[i]->neighbors[j].index - 1]->f_ptr;
-    //     }
-    // }
-
-    // for (i = 0; i < edge_points_size; i++) {
-    //     reader = hyper_subset->reference_list[2 * edge_points[i]->index - 2];
-    //     end = hyper_subset->reference_list[2 * edge_points[i]->index - 1];
-    //     while (reader != end) {
-    //         for (int k = 0; k < hyper_subset->knns; k++) {
-    //             if (!is_a_neighbor(hyper_subset->all_points[reader->index - 1]->neighbors, hyper_subset->knns, edge_points[i]->neighbors[k].index) && edge_points[i]->neighbors[k].distance < hyper_subset->all_points[reader->index - 1]->neighbors[hyper_subset->knns - 1].distance) {
-    //                 hyper_subset->all_points[reader->index - 1]->neighbors[hyper_subset->knns - 1].index = edge_points[i]->neighbors[k].index;
-    //                 hyper_subset->all_points[reader->index - 1]->neighbors[hyper_subset->knns - 1].distance = edge_points[i]->neighbors[k].distance;
-    //                 qsort(hyper_subset->all_points[reader->index - 1]->neighbors, (size_t)hyper_subset->knns, sizeof(Neighbor), qsort_compare);
-    //             }
-    //         }
-    //         reader = reader->f_ptr;
-    //     }
-    // }
 
     free(new_hyper_subset_1);
     free(new_hyper_subset_2);

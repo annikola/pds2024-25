@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
     delta = atoi(argv[4]);
 
     printf("Reading the corpus...\n");
-    c = read_2D_array_from_matfile(filename, &c_size, &d);
+    c = read_2D_array_from_matfile(filename, &c_size, &d); // BE CAREFUL IT CAN ONLY READ A VARIABLE NAMED 'C' !!!
 
     // for (i = 0; i < c_size; i++) {
     //     for (j = 0; j < d; j++) {
@@ -101,23 +101,6 @@ int main(int argc, char *argv[]) {
     root_hyper_set->delta = delta;
     hyper_binary_split(root_hyper_set);
 
-    // for (i = 0; i < c_size; i++) {
-    //     printf("%d: ", i + 1);
-    //     for (j = 0; j < knns; j++) {
-    //         printf("%lf ", c_points[i]->neighbors[j].distance);
-    //     }
-    //     printf("\b\n");
-    // }
-    // printf("\n");
-
-    // for (i = 0; i < c_size; i++) {
-    //     for (j = 0; j < knns; j++) {
-    //         printf("%d ", c_points[i]->neighbors[j].index);
-    //     }
-    //     printf("\b\n");
-    // }
-    // printf("\n");
-
     clock_gettime(CLOCK_MONOTONIC, &end);
 
     // Calculate the elapsed time in seconds
@@ -125,7 +108,7 @@ int main(int argc, char *argv[]) {
 
     printf("Multithreaded application finished in: %lf seconds!\n\n", elapsed);
 
-    printf("Fixing files format...\n");
+    // printf("Fixing files format...\n");
     my_idx = (double **)malloc(c_size * sizeof(double *));
     my_dst = (double **)malloc(c_size * sizeof(double *));
     for (i = 0; i < c_size; i++) {
@@ -138,9 +121,9 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Writing to mat files...\n");
-    // write_2D_array_to_matfile("my_c.mat", "C", c, c_size, d);
-    write_2D_array_to_matfile("my_idx.mat", "iii", my_idx, c_size, knns);
-    write_2D_array_to_matfile("my_dst.mat", "ddd", my_dst, c_size, knns);
+    // write_2D_array_to_matfile("datasets/my_c.mat", "C", c, c_size, d);
+    write_2D_array_to_matfile("datasets/my_idx.mat", "iii", my_idx, c_size, knns);
+    write_2D_array_to_matfile("datasets/my_dst.mat", "ddd", my_dst, c_size, knns);
     
     // free(c);
     free(my_idx);
@@ -257,6 +240,8 @@ void *hyper_binary_split(void *hyper_subset_void) {
     new_hyper_subset_2->points = realloc(new_hyper_subset_2->points, new_hyper_subset_2->set_size * sizeof(Point *));
 
     edge_points = realloc(edge_points, edge_points_size * sizeof(Point *));
+
+    // WARNING WHAT HAPPENS IF set_size < knns ???
 
     printf("NHS1: %d\n", new_hyper_subset_1->set_size);
     if (new_hyper_subset_1->set_size > hyper_subset->depth) {

@@ -4,6 +4,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <cblas.h>
+#include <unistd.h>
 
 #define MAX_SET_SPLIT 2
 #define Q_SPLIT 4
@@ -83,8 +84,10 @@ double *calculate_norms(double *matrix2D, int m_size, int d) {
 void *calculate_distances(void *args) {
 
     int i, j;
-    double *distances_part_matrix, *c_norms, *q_norms, *matrixmul;
+    double curr_distance;
+    double *c_norms, *q_norms, *matrixmul;
     calculate_distances_args *cd_args;
+    Neighbor *curr_neighbors;
 
     cd_args = (calculate_distances_args *)args;
 
@@ -94,16 +97,45 @@ void *calculate_distances(void *args) {
     c_norms = calculate_norms(cd_args->corpus, cd_args->corpus_size, cd_args->dimensions);
     q_norms = calculate_norms(cd_args->query_part, cd_args->query_part_size, cd_args->dimensions);
 
-    distances_part_matrix = (double *)malloc(cd_args->query_part_size * cd_args->corpus_size * sizeof(double));
-    for (i = 0; i < cd_args->query_part_size; i++) {
-        for (j = 0; j < cd_args->corpus_size; j++) {
-            distances_part_matrix[i * cd_args->corpus_size + j] = q_norms[i] + c_norms[j] + matrixmul[i * cd_args->corpus_size + j];
-            
-            // Check if the value to be squared is slightly below zero...(UNDERFLOW!!!)
-            if (distances_part_matrix[i * cd_args->corpus_size + j] < 0) {
-                distances_part_matrix[i * cd_args->corpus_size + j] = 0.0;
-            } else {
-                distances_part_matrix[i * cd_args->corpus_size + j] = sqrt(distances_part_matrix[i * cd_args->corpus_size + j]);
+    if (!cd_args->stitching) {
+        for (i = 0; i < cd_args->query_part_size; i++) {
+            cd_args->query_part_points[i]->neighbors = (Neighbor *)malloc(cd_args->corpus_size * sizeof(Neighbor));
+            for (j = 0; j < cd_args->corpus_size; j++) {
+                cd_args->query_part_points[i]->neighbors[j].index = cd_args->corpus_points[j]->index; // BIG CHANGE!!!
+
+                curr_distance = q_norms[i] + c_norms[j] + matrixmul[i * cd_args->corpus_size + j];
+                if (curr_distance < 0) {
+                    curr_distance = 0.0;
+                } else {
+                    curr_distance = sqrt(curr_distance);
+                }
+                cd_args->query_part_points[i]->neighbors[j].distance = curr_distance;
+            }
+        }
+
+        for (i = 0; i < cd_args->query_part_size; i++) {
+            qsort(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->corpus_size, sizeof(Neighbor), qsort_compare);
+            curr_neighbors = cd_args->query_part_points[i]->neighbors;
+            cd_args->query_part_points[i]->neighbors = (Neighbor *)malloc(cd_args->knns * sizeof(Neighbor));
+            memcpy(cd_args->query_part_points[i]->neighbors, curr_neighbors, cd_args->knns * sizeof(Neighbor));
+            // cd_args->query_part_points[i]->neighbors = realloc(cd_args->query_part_points[i]->neighbors, cd_args->knns * sizeof(Neighbor));
+            free(curr_neighbors);
+        }
+    } else {
+        for (i = 0; i < cd_args->query_part_size; i++) {
+            for (j = 0; j < cd_args->corpus_size; j++) {
+                curr_distance = q_norms[i] + c_norms[j] + matrixmul[i * cd_args->corpus_size + j];
+                if (curr_distance < 0) {
+                    curr_distance = 0.0;
+                } else {
+                    curr_distance = sqrt(curr_distance);
+                }
+
+                if (!is_a_neighbor(cd_args->query_part_points[i]->neighbors, cd_args->knns, cd_args->corpus_points[j]->index) && (curr_distance < cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].distance)) {
+                    cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].index = cd_args->corpus_points[j]->index;
+                    cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].distance = curr_distance;
+                    qsort(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->knns, sizeof(Neighbor), qsort_compare);
+                }
             }
         }
     }
@@ -111,34 +143,6 @@ void *calculate_distances(void *args) {
     free(matrixmul);
     free(c_norms);
     free(q_norms);
-
-    if (!cd_args->stitching) {
-        for (i = 0; i < cd_args->query_part_size; i++) {
-            cd_args->query_part_points[i]->neighbors = (Neighbor *)malloc(cd_args->corpus_size * sizeof(Neighbor));
-            for (j = 0; j < cd_args->corpus_size; j++) {
-                cd_args->query_part_points[i]->neighbors[j].index = cd_args->corpus_points[j]->index; // BIG CHANGE!!!
-                cd_args->query_part_points[i]->neighbors[j].distance = distances_part_matrix[i * cd_args->corpus_size + j];
-            }
-        }
-
-        for (i = 0; i < cd_args->query_part_size; i++) {
-            qsort(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->corpus_size, sizeof(Neighbor), qsort_compare);
-            cd_args->query_part_points[i]->neighbors = realloc(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->knns * sizeof(Neighbor));
-        }
-    } else {
-        for (i = 0; i < cd_args->query_part_size; i++) {
-            for (j = 0; j < cd_args->corpus_size; j++) {
-                if (!is_a_neighbor(cd_args->query_part_points[i]->neighbors, cd_args->knns, cd_args->corpus_points[j]->index) && (distances_part_matrix[i * cd_args->corpus_size + j] < cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].distance)) {
-                    printf("HERE!\n");
-                    cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].index = cd_args->corpus_points[j]->index;
-                    cd_args->query_part_points[i]->neighbors[cd_args->knns - 1].distance = distances_part_matrix[i * cd_args->corpus_size + j];
-                    qsort(cd_args->query_part_points[i]->neighbors, (size_t)cd_args->knns, sizeof(Neighbor), qsort_compare);
-                }
-            }
-        }
-    }
-
-    free(distances_part_matrix);
 }
 
 void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, int stitching) {

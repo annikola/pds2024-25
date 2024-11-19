@@ -1,0 +1,57 @@
+In order to run V0 and V1 you need to have MATLAB installed or at least the
+libraries that support reading and writing from and to .mat files.
+
+The default paths in this project are for a standard MATLAB installation.
+
+Open the Makefile and in the CFLAGS and LDFLAGS make sure that the paths to
+the static and dynamic libraries are correct and fit your installation.
+
+/usr/local/MATLAB/R2024b/extern/include : This path should be replaced with
+the path to MATLAB's include files (If necessary...)
+
+/usr/local/MATLAB/R2024b/bin/glnxa64 : This path should be replaced with the
+path to MATLAB's libraries. (If necessary...)
+
+If the include path was changed then also change it from the
+include/mat_read_write.h library inside the project.
+
+Finally this project uses openBLAS libraries which you need to install to
+your machine to run properly.
+
+Run "make all" inside the terminal to make all executables, which will       
+reside inside the buid/ directory. This will produce 3 executables v0, v1
+and v1_openmp
+
+To compile the opencilk approach use the src/v1_opencilk.c source file and
+your own approach, since it is apparent that there are a lot...
+
+-To use v0 run it like this:
+
+build/v0 corpus_set.mat corpus_variable query_set.mat query_variable k
+e.g. build/v0 corpus.mat C query.mat Q 100
+
+This will calculate the k nearest neighbors in C for each point in Q and 
+produce 2 files: my_idx.mat, which contains the indexes and my_dst.mat, which
+contains the distances. The mat variables need to be of double precision. 
+
+-To use v1 and v1_openmp run them like this:
+
+build/v1 train_set.mat train_variable k depth delta
+e.g. build/v1 sift-1m.mat C 50 20000 2000
+
+This will calculate an approximation of the k nearest neighbors in C with 
+itself and produce 2 files: my_idx.mat, which contains the indexes and 
+my_dst.mat, which contains the distances.
+The mat variables need to be of double precision.
+
+CAREFUL NOTICE:
+
+If your system has only 4GB of RAM DON'T RUN ANY OF THE ABOVE!!!
+This approach is designed for 8GB systems and above.
+If you have less RAM contact me for further instructions.
+Currently the default settings allow for a maximum of 100000 depth and 3000 delta.
+Generally the bigger these numbers are the slower and more accurate the
+implementation becomes.
+
+All in all if something unexpected happens and you can't solve it please
+contact me in Zulip so we can solve it together.

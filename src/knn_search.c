@@ -229,7 +229,7 @@ void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, P
         return;
     }
 
-    printf("Parting large set!\n");
+    // printf("Parting large set!\n");
     if (q_size % MAX_PART < knns) {
         parallel_parts = q_size / MAX_PART;
     }
@@ -244,7 +244,7 @@ void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, P
         q_parts[i] = Q + i * d * MAX_PART;
     }
 
-    printf("k-NN search started!\n");
+    // printf("k-NN search started!\n");
     for (i = 0; i < parallel_parts; i++) {
         if (i == parallel_parts - 1) {
             if (q_size % MAX_PART < knns) {
@@ -256,7 +256,7 @@ void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, P
             knn_parallel_search(C, q_parts[i], c_size, MAX_PART, d, knns, corpus_set_points, set_points_parts[i], all_points, stitching);
         }   
     }
-    printf("k-NN search finished!\n");
+    // printf("k-NN search finished!\n");
 
     free(q_parts);
     free(set_points_parts);

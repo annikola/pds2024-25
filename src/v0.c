@@ -4,19 +4,19 @@
 #define MIN_ARGS 5
 #define MIN_FEATURE 1.0
 #define MAX_FEATURE 100.0
-#define MAX_GB 1
+#define MAX_GB 5
 
 double random_double(double min, double max);
 
 int main(int argc, char *argv[]) {
 
-    int i, j;
-    int c_size, q_size, d, knns;
+    int i, j, d, knns;
+    size_t c_size, q_size, d_c, d_q;
     double elapsed;
     double *C, *Q;
     double **corpus, **query, **my_idx, **my_dst;
     struct timespec start, end;
-    // const char *filename;
+    const char *filename1, *varname1, *filename2, *varname2;
     Point **c_points, **q_points;
     
     if (argc < MIN_ARGS) {
@@ -24,43 +24,33 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    /* THA FYGEI STO TELOS!!! --> */
-
     srand(time(0));
 
-    // filename = &argv[1];
-    c_size = atoi(argv[1]);
-    q_size = atoi(argv[2]);
-    d = atoi(argv[3]);
-    knns = atoi(argv[4]);
+    filename1 = argv[1];
+    varname1 = argv[2];
+    filename2 = argv[3];
+    varname2 = argv[4];
+    knns = atoi(argv[5]);
 
-    if (q_size * c_size * sizeof(double) / 10e9 > MAX_GB) {
+    printf("Reading the corpus...\n");
+    corpus = read_2D_array_from_matfile(filename1, varname1, &c_size, &d_c);
+    printf("Reading the query...\n");
+    query = read_2D_array_from_matfile(filename2, varname2, &q_size, &d_q);
+
+    if (corpus > 100000) {
+        printf("This corpus is too big try a more approximate method...!\n");
+        return 0;
+    }
+
+    if (d_c != d_q) {
+        printf("Matrices have wrong dimensions!\n");
+        return 0;
+    } else if (q_size * c_size * sizeof(double) / 1e9 > MAX_GB) {
         printf("Matrices are too big...look for an approximate solution!\n");
         return 0;
     }
 
-    // This is the format that the matlab_write accepts...
-    corpus = (double **)malloc(c_size * sizeof(double *));
-    for (i = 0; i < c_size; i++) {
-        corpus[i] = (double *)malloc(d * sizeof(double));
-        for (j = 0; j < d; j++) {
-            corpus[i][j] = random_double(MIN_FEATURE, MAX_FEATURE);
-        }
-    }
-
-    query = (double **)malloc(q_size * sizeof(double *));
-    for (i = 0; i < q_size; i++) {
-        query[i] = (double *)malloc(d * sizeof(double));
-        for (j = 0; j < d; j++) {
-            query[i][j] = random_double(MIN_FEATURE, MAX_FEATURE);
-        }
-    }
-
-    /* <-- THA FYGEI STO TELOS!!! */
-
-    // printf("Reading the corpus...\n");
-    // c = read_2D_array_from_matfile(filename, varname, &c_size, &d);
-
+    d = (int)d_c;
     c_points = (Point **)malloc(c_size * sizeof(Point *));
     _2D_array_to_points(c_points, corpus, c_size, d);
     for (i = 0; i < c_size; i++) {
@@ -83,7 +73,7 @@ int main(int argc, char *argv[]) {
     printf("Initializing the k-NN search...\n");
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    knn_search(C, Q, c_size, q_size, d, knns, c_points, q_points, NULL, 0);
+    knn_search(C, Q, (int)c_size, (int)q_size, (int)d, knns, c_points, q_points, NULL, 0);
 
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
@@ -102,8 +92,6 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Writing to mat files...\n");
-    // write_2D_array_to_matfile("corpus.mat", "C", corpus, c_size, d);
-    // write_2D_array_to_matfile("query.mat", "Q", query, q_size, d);
     write_2D_array_to_matfile("my_idx.mat", "iii", my_idx, q_size, knns);
     write_2D_array_to_matfile("my_dst.mat", "ddd", my_dst, q_size, knns);
 
@@ -113,13 +101,4 @@ int main(int argc, char *argv[]) {
     free(my_dst);
 
     return 0;
-}
-
-double random_double(double min, double max) {
-
-    double scale;
-
-    scale = rand() / (double) RAND_MAX;
-
-    return min + scale * (max - min);
 }

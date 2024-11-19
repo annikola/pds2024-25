@@ -137,11 +137,6 @@ void *hyper_binary_split(void *hyper_subset_void) {
     double beta, hyper_position;
     hyper_set *hyper_subset, *new_hyper_subset_1, *new_hyper_subset_2;
     Point **edge_points;
-    pthread_t hyper_threads_ids[2];
-
-    for (i = 0; i < 2; i++) {
-        hyper_threads_ids[i] = -1;
-    }
 
     hyper_subset = (hyper_set *)hyper_subset_void;
 
@@ -230,7 +225,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
         if (new_hyper_subset_1->set_size > hyper_subset->depth) {
             if (hyper_subset->split_depth < MAX_SPLIT_DEPTH) {
                 printf("INITIATED A THREAD!\n");
-                pthread_create(&hyper_threads_ids[0], NULL, hyper_binary_split, new_hyper_subset_1);
+                // cilk_spawn hyper_binary_split(new_hyper_subset_1);
             } else {
                 hyper_binary_split(new_hyper_subset_1);
             }
@@ -240,7 +235,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
             knn_search(C1, C1, new_hyper_subset_1->set_size, new_hyper_subset_1->set_size, new_hyper_subset_1->d, new_hyper_subset_1->knns, new_hyper_subset_1->points, new_hyper_subset_1->points, hyper_subset->all_points, 0);
             free(C1);
         }
-
+        
         // printf("NHS2: %d\n", new_hyper_subset_2->set_size);
         if (new_hyper_subset_2->set_size > hyper_subset->depth) {
             hyper_binary_split(new_hyper_subset_2);
@@ -251,9 +246,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
             free(C2);
         }
 
-        if ((long)hyper_threads_ids[0] > 0) {
-            pthread_join(hyper_threads_ids[0], NULL);
-        }
+        cilk_sync;
 
         if (edge_points_size >= hyper_subset->knns) {
             // printf("Stitching NH1 and NH2...\n");

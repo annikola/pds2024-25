@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
     printf("Reading the query...\n");
     query = read_2D_array_from_matfile(filename2, varname2, &q_size, &d_q);
 
-    if (corpus > 100000) {
+    if (c_size > 100000) {
         printf("This corpus is too big try a more approximate method...!\n");
         return 0;
     }

@@ -31,8 +31,10 @@ build/v0 corpus_set.mat corpus_variable query_set.mat query_variable k
 e.g. build/v0 corpus.mat C query.mat Q 100
 
 This will calculate the k nearest neighbors in C for each point in Q and 
-produce 2 files: my_idx.mat, which contains the indexes and my_dst.mat, which
-contains the distances. The mat variables need to be of double precision. 
+produce 2 files inside the dataset/ directory:
+my_idx.mat, which contains the indexes and
+my_dst.mat, which contains the distances.
+The mat variables need to be of double precision. 
 
 -To use v1 and v1_openmp run them like this:
 
@@ -40,7 +42,8 @@ build/v1 train_set.mat train_variable k depth delta
 e.g. build/v1 sift-1m.mat C 50 20000 2000
 
 This will calculate an approximation of the k nearest neighbors in C with 
-itself and produce 2 files: my_idx.mat, which contains the indexes and 
+itself and produce 2 files inside the dataset/ directory:
+my_idx.mat, which contains the indexes and 
 my_dst.mat, which contains the distances.
 The mat variables need to be of double precision.
 

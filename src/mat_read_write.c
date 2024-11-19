@@ -1,25 +1,19 @@
-#include <stdlib.h>
-#include "/usr/local/MATLAB/R2024b/extern/include/mat.h"
+#include "../include/mat_read_write.h"
 
-double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d);
-void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
-
-double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t *d) {
+double **read_2D_array_from_matfile(const char *filename, const char *varname, size_t *c_size, size_t *d) {
 
     MATFile *pmat;
     mxArray *array_ptr;
     size_t i, j;
     double *data;
     double **c;
-    const char *varname = "C"; // Name of the variable to read
 
     pmat = matOpen(filename, "r");
     if (pmat == NULL) {
-        fprintf(stderr, "Error opening file data.mat\n");
+        fprintf(stderr, "Error opening file %s\n", filename);
         return NULL;
     }
 
-    // Read a variable from the .mat file
     array_ptr = matGetVariable(pmat, varname);
     if (array_ptr == NULL) {
         fprintf(stderr, "Error reading variable %s from file\n", varname);
@@ -27,9 +21,7 @@ double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t
         return NULL;
     }
 
-    // Check if the variable is of the expected type (for example, double matrix)
     if (mxIsDouble(array_ptr) && !mxIsComplex(array_ptr)) {
-        // Get the data pointer and array dimensions
         data = mxGetPr(array_ptr);
         size_t rows = mxGetM(array_ptr);
         size_t cols = mxGetN(array_ptr);
@@ -52,9 +44,8 @@ double **read_2D_array_from_matfile(const char *filename, size_t *c_size, size_t
         return NULL;
     }
 
-    // Clean up
-    mxDestroyArray(array_ptr); // Free the mxArray
-    matClose(pmat);            // Close the MAT-file
+    mxDestroyArray(array_ptr);
+    matClose(pmat);
 
     return c;
 }
@@ -78,11 +69,6 @@ void write_2D_array_to_matfile(const char *filename, const char *array_name, dou
         matClose(matFile);
         return;
     }
-
-    // matData = mxGetPr(matArray);
-    // for (i = 0; i < c_size; i++) {
-    //     memcpy(matData + i * d, _2D_array[i], d * sizeof(double));
-    // }
 
     // MATLAB saves in column major order, therefore we take the transpose...
     matData = mxGetPr(matArray);

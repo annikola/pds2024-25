@@ -1,3 +1,5 @@
 *.out
 *.mat
 *.gcc
+datasets/
+build/

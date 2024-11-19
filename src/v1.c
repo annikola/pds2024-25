@@ -5,21 +5,10 @@
 #include <math.h>
 #include <pthread.h>
 #include "/usr/local/MATLAB/R2024b/extern/include/mat.h"
+#include "../include/knn_search.h"
+#include "../include/mat_read_write.h"
 
-#define MAX_THREADS 4
-#define MAX_SET_SPLIT 2
 #define MIN_ARGS 5
-
-typedef struct {
-    double distance;
-    int index;
-} Neighbor;
-
-typedef struct {
-    double *coordinates;
-    Neighbor *neighbors;
-    int index;
-} Point;
 
 typedef struct {
     double *coeffs;
@@ -34,17 +23,8 @@ typedef struct {
     int delta;
 } hyper_set;
 
-void _2D_array_to_points(Point **c_points, double **corpus, size_t corpus_size, size_t dimensions);
-void _points_to_2D_mono_array(double *C, Point **c_points, size_t c_size, size_t d);
-void *hyper_binary_split(void *hyper_subset);
-int qsort_compare(const void* a, const void* b);
-int is_a_neighbor(Neighbor *neighbors, int knns, int current_index);
 int is_duplicate(double *point1, double *point2, int d);
-void knn_search(double *C, double *Q, int c_size, int q_size, int d, int knns, Point **set_points, Point **all_points, int stitching);
-double **read_2D_array_from_matfile(const char *filename, const char *varname, size_t *c_size, size_t *d);
-void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
-
-int threads_counter = 1;
+void *hyper_binary_split(void *hyper_subset);
 
 int main(int argc, char *argv[]) {
 
@@ -129,29 +109,17 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void _2D_array_to_points(Point **c_points, double **c, size_t c_size, size_t d) {
-    
-    int i, j;
+int is_duplicate(double *point1, double *point2, int d) {
 
-    for (i = 0; i < c_size; i++) {
-        c_points[i] = (Point *)malloc(sizeof(Point));
-        c_points[i]->coordinates = (double *)malloc(d * sizeof(double));
-        c_points[i]->index = i + 1; // Ti kai an mpei stin apo panw grammi?
-        for (j = 0; j < d; j++) {
-            c_points[i]->coordinates[j] = c[i][j];
+    int i;
+
+    for (i = 0; i < d; i++) {
+        if (point1[i] != point2[i]) {
+            return 0;
         }
     }
-}
 
-void _points_to_2D_mono_array(double *C, Point **c_points, size_t c_size, size_t d) {
-    
-    int i, j;
-
-    for (i = 0; i < c_size; i++) {
-        for (j = 0; j < d; j++) {
-            C[i * d + j] = c_points[i]->coordinates[j];
-        }
-    }
+    return 1;
 }
 
 void *hyper_binary_split(void *hyper_subset_void) {
@@ -164,7 +132,6 @@ void *hyper_binary_split(void *hyper_subset_void) {
     hyper_set *hyper_subset, *new_hyper_subset_1, *new_hyper_subset_2;
     Point **edge_points;
     pthread_t hyper_threads_ids[2];
-    // struct NeighborsList *reader, *end;
 
     for (i = 0; i < 2; i++) {
         hyper_threads_ids[i] = -1;
@@ -236,65 +203,53 @@ void *hyper_binary_split(void *hyper_subset_void) {
     free(normal_vector);
     free(midpoint);
 
-    new_hyper_subset_1->points = realloc(new_hyper_subset_1->points, new_hyper_subset_1->set_size * sizeof(Point *));
-
-    new_hyper_subset_2->points = realloc(new_hyper_subset_2->points, new_hyper_subset_2->set_size * sizeof(Point *));
-
-    edge_points = realloc(edge_points, edge_points_size * sizeof(Point *));
-
-    // WARNING WHAT HAPPENS IF set_size < knns ???
-    // WARNING WHAT HAPPENS IF edge_points_size >> 10.000 ???
-
-    printf("NHS1: %d\n", new_hyper_subset_1->set_size);
-    if (new_hyper_subset_1->set_size > hyper_subset->depth) {
-        if (threads_counter < 1) {
-            pthread_create(&hyper_threads_ids[0], NULL, hyper_binary_split, new_hyper_subset_1);
-            threads_counter++;
+    if (new_hyper_subset_1->set_size < hyper_subset->knns || new_hyper_subset_2->set_size < hyper_subset->knns) {
+        if (hyper_subset->set_size > hyper_subset->depth) {
+            hyper_binary_split(hyper_subset_void);
         } else {
-            hyper_binary_split(new_hyper_subset_1);
+            C1 = (double *)malloc(hyper_subset->set_size * hyper_subset->d * sizeof(double));
+            _points_to_2D_mono_array(C1, hyper_subset->points, hyper_subset->set_size, hyper_subset->d);
+            knn_search(C1, C1, hyper_subset->set_size, hyper_subset->set_size, hyper_subset->d, hyper_subset->knns, hyper_subset->points, hyper_subset->points, hyper_subset->all_points, 0);
+            free(C1);
         }
     } else {
-        C1 = (double *)malloc(new_hyper_subset_1->set_size * new_hyper_subset_1->d * sizeof(double));
-        _points_to_2D_mono_array(C1, new_hyper_subset_1->points, new_hyper_subset_1->set_size, new_hyper_subset_1->d);
-        knn_search(C1, C1, new_hyper_subset_1->set_size, new_hyper_subset_1->set_size, new_hyper_subset_1->d, new_hyper_subset_1->knns, new_hyper_subset_1->points, hyper_subset->all_points, 0);
-        free(C1);
-    }
+        new_hyper_subset_1->points = realloc(new_hyper_subset_1->points, new_hyper_subset_1->set_size * sizeof(Point *));
 
-    printf("NHS2: %d\n", new_hyper_subset_2->set_size);
-    if (new_hyper_subset_2->set_size > hyper_subset->depth) {
-        hyper_binary_split(new_hyper_subset_2);
-    } else {
-        C2 = (double *)malloc(new_hyper_subset_2->set_size * new_hyper_subset_2->d * sizeof(double));
-        _points_to_2D_mono_array(C2, new_hyper_subset_2->points, new_hyper_subset_2->set_size, new_hyper_subset_2->d);
-        knn_search(C2, C2, new_hyper_subset_2->set_size, new_hyper_subset_2->set_size, new_hyper_subset_2->d, new_hyper_subset_2->knns, new_hyper_subset_2->points, hyper_subset->all_points, 0);
-        free(C2);
-    }
+        new_hyper_subset_2->points = realloc(new_hyper_subset_2->points, new_hyper_subset_2->set_size * sizeof(Point *));
 
-    if ((long int)hyper_threads_ids[0] > 0) {
-        pthread_join(hyper_threads_ids[0], NULL);
-    }
+        edge_points = realloc(edge_points, edge_points_size * sizeof(Point *));
 
-    printf("Stitching NH1 and NH2...\n");
-    printf("Number of edge points: %d\n", edge_points_size);
-    C3 = (double *)malloc(edge_points_size * hyper_subset->d * sizeof(double));
-    _points_to_2D_mono_array(C3, edge_points, edge_points_size, hyper_subset->d);
-    knn_search(C3, C3, edge_points_size, edge_points_size, hyper_subset->d, hyper_subset->knns, edge_points, hyper_subset->all_points, 1);
-    free(C3);
+        printf("NHS1: %d\n", new_hyper_subset_1->set_size);
+        if (new_hyper_subset_1->set_size > hyper_subset->depth) {
+            hyper_binary_split(new_hyper_subset_1);
+        } else {
+            C1 = (double *)malloc(new_hyper_subset_1->set_size * new_hyper_subset_1->d * sizeof(double));
+            _points_to_2D_mono_array(C1, new_hyper_subset_1->points, new_hyper_subset_1->set_size, new_hyper_subset_1->d);
+            knn_search(C1, C1, new_hyper_subset_1->set_size, new_hyper_subset_1->set_size, new_hyper_subset_1->d, new_hyper_subset_1->knns, new_hyper_subset_1->points, new_hyper_subset_1->points, hyper_subset->all_points, 0);
+            free(C1);
+        }
+
+        printf("NHS2: %d\n", new_hyper_subset_2->set_size);
+        if (new_hyper_subset_2->set_size > hyper_subset->depth) {
+            hyper_binary_split(new_hyper_subset_2);
+        } else {
+            C2 = (double *)malloc(new_hyper_subset_2->set_size * new_hyper_subset_2->d * sizeof(double));
+            _points_to_2D_mono_array(C2, new_hyper_subset_2->points, new_hyper_subset_2->set_size, new_hyper_subset_2->d);
+            knn_search(C2, C2, new_hyper_subset_2->set_size, new_hyper_subset_2->set_size, new_hyper_subset_2->d, new_hyper_subset_2->knns, new_hyper_subset_2->points, new_hyper_subset_2->points, hyper_subset->all_points, 0);
+            free(C2);
+        }
+
+        if (edge_points_size >= hyper_subset->knns) {
+            printf("Stitching NH1 and NH2...\n");
+            printf("Number of edge points: %d\n", edge_points_size);
+            C3 = (double *)malloc(edge_points_size * hyper_subset->d * sizeof(double));
+            _points_to_2D_mono_array(C3, edge_points, edge_points_size, hyper_subset->d);
+            knn_search(C3, C3, edge_points_size, edge_points_size, hyper_subset->d, hyper_subset->knns, edge_points, edge_points, hyper_subset->all_points, 1);
+            free(C3);
+        }
+    }
 
     free(new_hyper_subset_1);
     free(new_hyper_subset_2);
     free(edge_points);
-}
-
-int is_duplicate(double *point1, double *point2, int d) {
-
-    int j;
-
-    for (j = 0; j < d; j++) {
-        if (point1[j] != point2[j]) {
-            return 0;
-        }
-    }
-
-    return 1;
 }

@@ -1,11 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "/usr/local/MATLAB/R2024b/extern/include/mat.h"
+#include "../include/mat_read_write.h"
 
 #define MIN_ARGS 4
-
-double **read_2D_array_from_matfile(const char *filename, const char *varname, size_t *c_size, size_t *d);
-void write_2D_array_to_matfile(const char *filename, const char *array_name, double **_2D_array, int c_size, int d);
 
 int main(int argc, char *argv[]) {
 

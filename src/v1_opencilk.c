@@ -225,7 +225,7 @@ void *hyper_binary_split(void *hyper_subset_void) {
         if (new_hyper_subset_1->set_size > hyper_subset->depth) {
             if (hyper_subset->split_depth < MAX_SPLIT_DEPTH) {
                 printf("INITIATED A THREAD!\n");
-                // cilk_spawn hyper_binary_split(new_hyper_subset_1);
+                cilk_spawn hyper_binary_split(new_hyper_subset_1);
             } else {
                 hyper_binary_split(new_hyper_subset_1);
             }

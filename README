@@ -50,7 +50,8 @@ The mat variables need to be of double precision.
 CAREFUL NOTICE:
 
 If your system has only 4GB of RAM DON'T RUN ANY OF THE ABOVE!!!
-This approach is designed for 8GB systems and above.
+This approach is designed for 8GB systems and above and it is STRONGLY RECOMMENDED
+to close all other memory expensive programs as you run this.
 If you have less RAM contact me for further instructions.
 Currently the default settings allow for a maximum of 50000 depth and 2000 delta.
 Generally the bigger these numbers are the slower and more accurate the

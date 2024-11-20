@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
     depth = atoi(argv[4]);
     delta = atoi(argv[5]);
 
-    if (depth > 100000 || delta > 3000) {
+    if (depth > 50000 || delta > 2000) {
         printf("This will ruin you DON'T DO IT (Change me inside the source file if you insist...)!\n");
         return 0;
     }

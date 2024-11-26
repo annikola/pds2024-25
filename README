@@ -47,6 +47,9 @@ my_idx.mat, which contains the indexes and
 my_dst.mat, which contains the distances.
 The mat variables need to be of double precision.
 
+You can calculate the recall of the results using the helper/recallCalc
+program (you may need to compile it separately) or any other program of your own choosing...
+
 CAREFUL NOTICE:
 
 If your system has only 4GB of RAM DON'T RUN ANY OF THE ABOVE!!!

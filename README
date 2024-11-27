@@ -25,6 +25,16 @@ and v1_openmp
 To compile the opencilk approach use the src/v1_opencilk.c source file and
 your own approach, since it is apparent that there are a lot...
 
+My approach was building opencilk from source and then I compile with:
+
+/opt/opencilk-2/bin/clang src/mat_read_write.c src/knn_search.c src/v1_opencilk.c -O2 \
+-I include -I /usr/local/MATLAB/R2024b/extern/include \
+-L /usr/local/MATLAB/R2024b/bin/glnxa64 -Wl,-rpath,/usr/local/MATLAB/R2024b/bin/glnxa64 \
+-lm -lpthread -lopenblas -lmat -lmx -fopencilk \
+-o build/v1_opencilk
+
+You may also need to write this line: #include "path/to/cilk.h" in src/v1_opencilk.c
+
 -To use v0 run it like this:
 
 build/v0 corpus_set.mat corpus_variable query_set.mat query_variable k
